@@ -1,2 +1,2 @@
 # Auto-C-To-CUDA
-Code for master's thesis
+Automatic C to CUDA translator built with the [ROSE Compiler](http://rosecompiler.org).
