@@ -15,7 +15,7 @@ ROSE_LIBS = $(ROSE_LIB_DIR)/librose.la
 
 PROJ_DEPS = normalize.lo
 
-translate.out: $(PROJ_DEPS)
+translate: $(PROJ_DEPS)
 	$(ROSE_BUILD)/libtool --mode=link $(CXX) $(CXXFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -o translate.out $(PROJ_DEPS) translate.cpp $(ROSE_LIBS) 
 
 normalize.lo: ./include/normalize/normalize.cpp ./include/normalize/normalize.hpp 

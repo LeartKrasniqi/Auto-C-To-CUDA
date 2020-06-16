@@ -2,6 +2,33 @@
 
 #include "normalize.hpp"
 
+/* Normalize the loop nest (this gets called in main() of translate.cpp */
+bool normalizeLoopNest(SgForStatement *loop_nest)
+{
+	/* Obtain each of the loops in the nest */
+	Rose_STL_Container<SgNode*> loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+
+	/* Loop thru the loops in the nest */
+	Rose_STL_Container<SgNode*>::iterator iter;
+	for(iter = loops.begin(); iter != loops.end(); iter++)
+	{
+		/* Make proper cast */
+		SgForStatement *loop = isSgForStatement(*iter);
+
+		/* Return false if any of the loops in the nest cannot be normalized */
+		if(!normalizeLoop(loop))
+			return false;
+	}
+
+	/* Perform constant folding on the normalized nest (need to supply the parent node) */
+	SageInterface::constantFolding(loop_nest->get_parent());
+
+	/* If we get here, the loop nest should be normalized */
+	return true;
+}
+
+
+/* Normalize individual loops (this gets called by normalizeLoopNest() */
 bool normalizeLoop(SgForStatement *loop)
 {
 	/* Creates loop in form of: int i; for(i = L; i <= U; i += S) */
@@ -122,13 +149,16 @@ bool normalizeLoop(SgForStatement *loop)
 		/* Make the change from index to (index*S)-S+L */
 		if(var_name.compare(index_var_name) == 0)
 		{
+						
+			/* Make it (index*S) + (L-S) to help with constant folding */
 			SgExpression *mul = SageBuilder::buildMultiplyOp(index, S);
-			SgExpression *new_var = SageBuilder::buildAddOp( SageBuilder::buildSubtractOp(mul, S) , L);
-			
+			//SgExpression *new_var = SageBuilder::buildAddOp( SageBuilder::buildSubtractOp(mul, S) , L);
+			SgExpression *new_var = SageBuilder::buildAddOp(mul, SageBuilder::buildSubtractOp(L, S) );				
 			SageInterface::replaceExpression(isSgVarRefExp(*it), new_var); 
 		}
 	
 	}
+
 
 	/* If we get here, all steps were successful and loop is normalized */
 	return true;
