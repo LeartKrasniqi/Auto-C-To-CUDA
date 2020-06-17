@@ -3,6 +3,7 @@
 #ifndef AFFINE
 #define AFFINE
 #include "rose.h"
+#include "../loop_attr.hpp"
 
 /* Function to test whether given loop nest is affine
  
@@ -39,7 +40,7 @@ SgExpression * indexConstantFolding(SgExpression *expr);
 
 /* Function to test whether a single expression is affine 
    
-   Input: Expression
+   Input: Expression 
    Output: true if exression is affine, false otherwise
 
    This function is ultimately used by affineTest().
