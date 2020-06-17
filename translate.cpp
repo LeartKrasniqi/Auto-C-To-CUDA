@@ -1,22 +1,9 @@
 #include "rose.h"
 #include <iostream>
+#include "./include/loop_attr.hpp"
 #include "./include/normalize/normalize.hpp"
 #include "./include/affine/affine.hpp"
 #define DEBUG 1
-
-/* Class for setting attributes of loop nest */
-class LoopNestAttribute : public AstAttribute {
-	public:
-		LoopNestAttribute(int s, bool f) {this->size = s; this->flag = f;}
-		virtual LoopNestAttribute * copy() const override {return new LoopNestAttribute(*this);}
-		virtual std::string attribute_class_name() const override {return "LoopNestAttribute";}
-		int get_nest_size() {return size;}
-		bool get_nest_flag() {return flag;}
-		void set_nest_flag(bool new_flag) {flag = new_flag;}
-	private:
-		int size;
-		bool flag;
-};
 
 
 int main(int argc, char **argv)
@@ -50,7 +37,7 @@ int main(int argc, char **argv)
 			/* Find loop nest size */
 			Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
 			int nest_size = inner_loops.size();
-
+			
 			/* Set attributes (applied to outermost loop) */
 			loop_nest->setAttribute("LoopNestInfo", new LoopNestAttribute(nest_size, true));
 			
@@ -72,9 +59,9 @@ int main(int argc, char **argv)
 			
 
 			/* Obtain the attribute of the nest */
-			LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
+			LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));	
 			
-			
+
 			/* Perform normalization */
 			if(!normalizeLoopNest(loop_nest))
 			{
@@ -82,7 +69,16 @@ int main(int argc, char **argv)
 				attr->set_nest_flag(false);
 				continue;
 			}
+			
+			/* Obtain the iteration vector for the loop nest */
+			std::list<std::string> iter_vec;
+			Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+			Rose_STL_Container<SgNode*>::iterator inner_it;
+			for(inner_it = inner_loops.begin(); inner_it != inner_loops.end(); inner_it++)
+				iter_vec.push_back( SageInterface::getLoopIndexVariable(*inner_it)->get_name().getString() );
 
+			/* Append iter_vec to attributes */
+			attr->set_iter_vec(iter_vec);	
 			
 			/* Affine test */
 			affineTest(loop_nest);
