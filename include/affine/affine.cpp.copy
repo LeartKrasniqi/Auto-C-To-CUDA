@@ -1,0 +1,110 @@
+/* Implementation of affine test functions */
+#include "affine.hpp"
+
+/* Test whether loop nest is affine */
+bool affineTest(SgForStatement *loop_nest)
+{
+	/* Obtain the body of the loop nest (assuming the nest is perfectly nested) */
+	SgStatement *body = loop_nest->get_loop_body();
+	while(isSgForStatement(body))
+		body = isSgForStatement(body)->get_loop_body();
+
+	
+	/* Get each statement in the body */
+	SgStatementPtrList &stmts = isSgBasicBlock(body)->get_statements();
+
+	/* Loop through each statement */
+	std::list<SgStatement*>:iterator:: stmt_iter;
+	for(stmt_iter = stmts.begin(); stmt_iter != stmts.end(); stmt_iter++)
+	{
+		SgStatement *s = *stmt_iter;
+
+		/* We only care about assignment ops (because of their possible dependencies) */
+		SgAssignOp *op = isSgAssignOp(s);
+		if(!op)
+			continue;
+		
+		/* Get lhs (i.e. WRITE) and rhs (i.e. READ) array references */
+		Rose_STL_Container<SgNode*> array_refs_lhs = NodeQuery::querySubTree(op->get_lhs_operand(), V_SgPntrArrRefExp); 
+		Rose_STL_Container<SgNode*> array_refs_lhs = NodeQuery::querySubTree(op->get_rhs_operand(), V_SgPntrArrRefExp);
+
+			
+
+#if 1
+		/* Go thru each array reference on lhs */
+		std::list<SgExpression*> write_index_list;
+		Rose_STL_Container<SgNode*>::iterator arr_iter;
+		for(arr_iter = array_refs_lhs.begin(); arr_iter != array_refs_lhs.end(); arr_iter++)
+		{
+			/* Since this is lhs, there should only be one array reference per dim (since only one arr can be on lhs) */
+			SgExpression *exp_rhs = isSgPntrArrRefExp(*arr_iter)->get_rhs_operand();
+
+			/* Perform any constant folding */
+			indexConstantFolding(exp_rhs);
+
+			/* Check if expression is affine and return false immediately if not */
+			if(!affineTestExpr(exp_rhs))
+				return false;
+
+			/* Append expr to list of write indices */
+			write_index_list.push_back(exp_rhs);
+		}
+
+		/* Dim size of array being written to (assume all READ arrays are of this size) */
+		int dim_size = write_index_list.size();
+
+
+		/* Loop thru the rhs array references */
+	       	for(arr_iter = array_refs_lhs.begin(); arr_iter != array_refs_rhs.end(); arr_iter += dim_size)
+		{
+			SgExpression *arr_ref_exp
+		}	
+		
+		
+		
+		while(arr_iter != array_refs.end())
+		{
+			int dim_size = 0;
+			
+			SgExpression *arr_ref_exp = isSgPntrArrRefExp(*arr_iter);
+
+			/* Need a call to get_rhs_operand() for each array dimension (returns inner most first) */
+			do
+			{	
+				/* Obtain outer most array index expression */
+				SgExpression *exp_rhs = arr_ref_exp->get_rhs_operand();
+				
+				/* Perform any constant folding */
+				indexConstantFolding(exp_rhs);
+
+				/* Check if expression is affine and return false immediately if not */
+				if(!affineTestExpr(exp_rhs))
+					return false;
+			
+				/* Re-assign arr_ref_exp to the lhs of the arr_ref so that we can recursively deal with the dims */
+				arr_ref_exp = arr_ref_exp->get_lhs_operand();
+			}
+			/* Keep getting the rhs operand until the lhs operand is the array itself */
+			while(!isSgVarRefExp(arr_ref_exp));
+
+			/* Skip over the array references already dealt with */
+			arr_iter += dim_size;
+		
+		}
+
+#endif
+		
+		/* Loop through each array reference expression */
+		Rose_STL_Container<SgNode*>::iterator arr_iter;
+		for(arr_iter = array_refs.begin(); arr_it != array_refs.end(); arr_iter++)
+		{
+			//std::cout << isSgPntrArrRefExp((*arr_iter))->get_rhs_operand()->unparseToString() << std::endl;
+		}
+	}	
+		
+	
+	/* Make sure any possible constant folding has been accomplished */
+	//indexConstantFolding();
+	
+	return true;
+}

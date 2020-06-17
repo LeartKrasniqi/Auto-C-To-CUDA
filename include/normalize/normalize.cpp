@@ -146,12 +146,12 @@ bool normalizeLoop(SgForStatement *loop)
 		std::string var_name = isSgVarRefExp(*it)->get_symbol()->get_name().getString();
 		std::string index_var_name = isSgVarRefExp(index)->get_symbol()->get_name().getString();
 
-		/* Make the change from index to (index*S)-S+L */
+		/* Make the change from index to (S*index)-S+L */
 		if(var_name.compare(index_var_name) == 0)
 		{
 						
-			/* Make it (index*S) + (L-S) to help with constant folding */
-			SgExpression *mul = SageBuilder::buildMultiplyOp(index, S);
+			/* Make it (S*index) + (L-S) to help with constant folding */
+			SgExpression *mul = SageBuilder::buildMultiplyOp(S, index);
 			//SgExpression *new_var = SageBuilder::buildAddOp( SageBuilder::buildSubtractOp(mul, S) , L);
 			SgExpression *new_var = SageBuilder::buildAddOp(mul, SageBuilder::buildSubtractOp(L, S) );				
 			SageInterface::replaceExpression(isSgVarRefExp(*it), new_var); 

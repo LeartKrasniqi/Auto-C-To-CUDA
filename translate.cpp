@@ -1,6 +1,7 @@
 #include "rose.h"
 #include <iostream>
 #include "./include/normalize/normalize.hpp"
+#include "./include/affine/affine.hpp"
 #define DEBUG 1
 
 /* Class for setting attributes of loop nest */
@@ -82,9 +83,9 @@ int main(int argc, char **argv)
 				continue;
 			}
 
-			if(attr->get_nest_flag())
-				std::cout << loop_nest->unparseToString() << std::endl;
-
+			
+			/* Affine test */
+			affineTest(loop_nest);
 			
 		}
 
