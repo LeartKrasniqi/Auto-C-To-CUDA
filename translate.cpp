@@ -65,28 +65,70 @@ int main(int argc, char **argv)
 			/* Perform normalization */
 			if(!normalizeLoopNest(loop_nest))
 			{
-				std::cout << "Loop Nest Skipped" << std::endl;
+				std::cout << "Loop Nest Skipped (Not Normalized)" << std::endl;
 				attr->set_nest_flag(false);
 				continue;
 			}
 			
-			/* Obtain the iteration vector for the loop nest */
-			std::list<std::string> iter_vec;
+			/* Obtain the iteration, bound, and symbolic_constant vectors for the loop nest */
+			std::list<std::string> iter_vec, symb_vec;
+			std::list<SgExpression*> bound_vec;
 			Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
 			Rose_STL_Container<SgNode*>::iterator inner_it;
 			for(inner_it = inner_loops.begin(); inner_it != inner_loops.end(); inner_it++)
-				iter_vec.push_back( SageInterface::getLoopIndexVariable(*inner_it)->get_name().getString() );
+			{
+				SgForStatement *l = isSgForStatement(*inner_it);
+				
+				/* Iteration variables */
+				iter_vec.push_back( SageInterface::getLoopIndexVariable(l)->get_name().getString() );
+				
+				/* Bounds Expressions */
+				SgExpression *bound = isSgBinaryOp(l->get_test_expr())->get_rhs_operand();
+				bound_vec.push_back(bound);
 
-			/* Append iter_vec to attributes */
-			attr->set_iter_vec(iter_vec);	
+				/* Symbolic Constants -- Query for any variable references in the bounds expression */
+				Rose_STL_Container<SgNode*> v = NodeQuery::querySubTree(bound, V_SgVarRefExp);
+				for(Rose_STL_Container<SgNode*>::iterator v_it = v.begin(); v_it != v.end(); v_it++)
+				{
+					std::string var_name = isSgVarRefExp(*v_it)->get_symbol()->get_name().getString();
+					
+					/* Keep only unique vars */
+					if( std::find(symb_vec.begin(), symb_vec.end(), var_name) != symb_vec.end() )
+						continue;
+					else
+						symb_vec.push_back(var_name);
+					
+				}
+
+				
+			}
+
+				
+			/* Append iter_vec, bound_vec, and symb_vec to attributes */
+			attr->set_iter_vec(iter_vec);
+			attr->set_bound_vec(bound_vec);
+			attr->set_symb_vec(symb_vec);	
 			
 			/* Affine test */
-			affineTest(loop_nest);
+			if(!affineTest(loop_nest))
+			{
+				std::cerr << "NOTAFFINE" << std::endl;
+				//std::cout << "Loop Nest Skipped (Not Affine)" << std::endl;
+				attr->set_nest_flag(false);
+				continue;
+			}
+
+
+			/* TODO: Dependency Tests */
+
+
+			/* TODO: Parallelism Extraction */
+
+			
+			/* TODO: Code Generation */
 			
 		}
 
-
-			/* Perform other things ... */
 
 		#if DEBUG
 		std::cout << defn->unparseToString() << std::endl;	

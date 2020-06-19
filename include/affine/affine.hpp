@@ -40,11 +40,11 @@ SgExpression * indexConstantFolding(SgExpression *expr);
 
 /* Function to test whether a single expression is affine 
    
-   Input: Expression 
+   Input: Expression and loop nest 
    Output: true if exression is affine, false otherwise
 
    This function is ultimately used by affineTest().
 */ 
-bool affineTestExpr(SgExpression *expr);
+bool affineTestExpr(SgExpression *expr, SgForStatement *loop_nest);
 
 #endif

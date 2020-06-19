@@ -7,13 +7,27 @@ bool affineTest(SgForStatement *loop_nest)
 {
 	/* Obtain the attributes of the loop */
 	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
-	std::list<std::string> loop_iter_vec = attr->get_iter_vec();	
+	std::list<std::string> loop_iter_vec = attr->get_iter_vec();
+	std::list<SgExpression*> loop_bound_vec = attr->get_bound_vec();
+	std::list<std::string> loop_symb_vec = attr->get_symb_vec();	
 	
 	/* Obtain the body of the loop nest (assuming the nest is perfectly nested) */
 	SgStatement *body = loop_nest->get_loop_body();
 	while(isSgForStatement(body))
 		body = isSgForStatement(body)->get_loop_body();
+	
+	/* Check to make sure that the values in loop_symb_vec are actually constant (i.e. loop invariant) */
+	std::set<SgInitializedName*> read_vars, write_vars;
+	SageInterface::collectReadWriteVariables(body, read_vars, write_vars);    // Cannot handle a[i++], might need to add additional check 
+	for(std::set<SgInitializedName*>::iterator w_it = write_vars.begin(); w_it != write_vars.end(); w_it++)	
+		if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), (*w_it)->get_name().getString()) != loop_symb_vec.end() )
+		      	return false;	
 
+	/* Check if loop bounds are affine */
+	for(std::list<SgExpression*>::iterator bound_iter = loop_bound_vec.begin(); bound_iter != loop_bound_vec.end(); bound_iter++)
+		if(!affineTestExpr(*bound_iter, loop_nest))
+			return false;
+	
 	/* Get the array references */
 	Rose_STL_Container<SgNode*> array_refs = NodeQuery::querySubTree(body, V_SgPntrArrRefExp); 
 	
@@ -22,7 +36,7 @@ bool affineTest(SgForStatement *loop_nest)
 	for(arr_iter = array_refs.begin(); arr_iter != array_refs.end(); arr_iter++)
 	{
 		SgExpression *expr = isSgPntrArrRefExp(*arr_iter)->get_rhs_operand();
-		
+		std::cout << expr->unparseToString() << std::endl;
 		if(expr)
 		{
 			/* Perform any constant folding */
@@ -34,47 +48,12 @@ bool affineTest(SgForStatement *loop_nest)
 			/* Perform built-in constant folding now */
 			SageInterface::constantFolding(*arr_iter);
 		
-			/* Find references to variables in the expression */
-			Rose_STL_Container<SgNode*> var_refs = NodeQuery::querySubTree(new_expr, V_SgVarRefExp);
-			
-			/* Get only unique references */
-			Rose_STL_Container<SgNode*>::iterator var_it;
-			std::list<std::string> var_ref_strings;
-			for(var_it = var_refs.begin(); var_it != var_refs.end(); var_it++)
-			{
-				std::string index_string = isSgVarRefExp(*var_it)->get_symbol()->get_name().getString();
-				
-				if( std::find(var_ref_strings.begin(), var_ref_strings.end(), index_string) != var_ref_strings.end() )
-					continue;
-				else
-					var_ref_strings.push_back(index_string);
-			}
-
-			/* Loop thru the references in the expression and count the number of index variables being referenced */
-			int num_refs = 0;
-			std::list<std::string>::iterator var_ref_it;
-			for(var_ref_it = var_ref_strings.begin(); var_ref_it != var_ref_strings.end(); var_ref_it++)
-			{
-				std::string index_string = *var_ref_it;
-				
-				/* Check to see if expression contains reference to an index variable */
-				if( std::find(loop_iter_vec.begin(), loop_iter_vec.end(), index_string) != loop_iter_vec.end() )
-					num_refs += 1;
-			}
-
-			/* If only one index variable is being referenced, the expression could potentially be affine */
-			if(num_refs == 1)
-			{
-				if(!affineTestExpr(new_expr))
-					return false;
-			
-			}
-			/* If more than one index variable is being referenced, the expression is not affine */
-			else if(num_refs > 1)
+			/* Check whether expression is affine */
+			if(!affineTestExpr(new_expr, loop_nest))
 				return false;
-			
 		}
 	}
+
 
 
 	/* If we get here, all expressions within the body are affine, so the loop nest is affine */
@@ -84,7 +63,7 @@ bool affineTest(SgForStatement *loop_nest)
 
 /* Perform some additional constant folding in the array expression */
 SgExpression * indexConstantFolding(SgExpression *expr)
-{
+{	
 	SgBinaryOp *op = isSgBinaryOp(expr);
 	
 	if(!op)
@@ -111,7 +90,7 @@ SgExpression * indexConstantFolding(SgExpression *expr)
 	 	SgExpression *A, *i, *B, *C, *D;	
 		
 		/* Keeping these just in case since I needed to add error checking and it looks less fancy now :( */
-		#if 0
+		/*
 		SgExpression *A = isSgBinaryOp(
 				  isSgBinaryOp(
 				  isSgBinaryOp(
@@ -131,7 +110,7 @@ SgExpression * indexConstantFolding(SgExpression *expr)
 					op->get_lhs_operand())
 					->get_rhs_operand())
 					->get_rhs_operand();
-		#endif
+		*/
 		
 		SgBinaryOp *A_intermed = isSgBinaryOp(isSgBinaryOp(op->get_lhs_operand())->get_rhs_operand());
 		if(A_intermed)
@@ -241,10 +220,16 @@ SgExpression * indexConstantFolding(SgExpression *expr)
 
 
 /* Perform affine check on single expression */
-bool affineTestExpr(SgExpression *expr)
+bool affineTestExpr(SgExpression *expr, SgForStatement *loop_nest)
 {
-	/* Expression is affine iff is it of form A*i +/- B, where i is the index */
+	/* Expression is affine iff is it of form A*i + B*j + C*k + ... + Z, where (i,j,k,..) are iter_vars or symbolic consts */
 	
+	/* Obtain attributes of loop */
+	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
+	std::list<std::string> loop_iter_vec = attr->get_iter_vec();
+	std::list<SgExpression*> loop_bound_vec = attr->get_bound_vec();
+	std::list<std::string> loop_symb_vec = attr->get_symb_vec();	
+
 	/* If exp is a constant, return true */
 	if(isSgValueExp(expr))
 		return true;
@@ -256,22 +241,94 @@ bool affineTestExpr(SgExpression *expr)
 		
 		/* An add/sub op is affine iff both lhs and rhs are affine */
 		if( isSgAddOp(expr) || isSgSubtractOp(expr) )
-			return ( affineTestExpr(lhs) && affineTestExpr(rhs) );
+			return ( affineTestExpr(lhs, loop_nest) && affineTestExpr(rhs, loop_nest) );
 		
 		/* A multiply op is affine iff it is A*i or i*A */
 		if( isSgMultiplyOp(expr) )
 		{
-			/* Case I: A*i --> Affine */
-			if(isSgValueExp(lhs) && isSgVarRefExp(rhs))
-				return true;
+			if(isSgVarRefExp(lhs))
+			{
+				/* Right multiply by constant --> Affine */
+				if(isSgValueExp(rhs))
+					return true;
 
-			/* Case II: i*A --> Affine */
-			if(isSgVarRefExp(lhs) && isSgValueExp(rhs))
-				return true;
+				/* Check to see if this is an iter_var or symb_var */
+				bool isIterSymbVal = false;
+				std::string lhs_string = isSgVarRefExp(lhs)->get_symbol()->get_name().getString();
+				if( std::find(loop_iter_vec.begin(), loop_iter_vec.end(), lhs_string) != loop_iter_vec.end() )
+					isIterSymbVal = true;
+				else if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), lhs_string) != loop_symb_vec.end() )
+					isIterSymbVal = true;
+
+
+				/* Otherwise, check to make sure there is no reference to another iter_var or symb_var */
+				Rose_STL_Container<SgNode*> v_ref = NodeQuery::querySubTree(rhs, V_SgVarRefExp);
+				for(Rose_STL_Container<SgNode*>::iterator v_it = v_ref.begin(); v_it != v_ref.end(); v_it++)
+				{
+					std::string v_string = isSgVarRefExp(*v_it)->get_symbol()->get_name().getString();
+					
+					/* Check the iter_vec vals */
+					if( std::find(loop_iter_vec.begin(), loop_iter_vec.end(), v_string) != loop_iter_vec.end() )
+						if(isIterSymbVal)
+							return false;
+
+					/* Check the symb_vec vals */
+					if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), v_string) != loop_symb_vec.end() )
+						if(isIterSymbVal)
+							return false;
+
+				}
+			
+				/* If we get here, rhs and lhs dont both refer to iter or symb vars, so just check their affinities */
+				return ( affineTestExpr(rhs, loop_nest) && lhs->get_type()->isIntegerType() );
+	
+			}
+
+			if(isSgVarRefExp(rhs))
+			{
+				/* Left multiply by constant --> Affine */
+				if(isSgValueExp(lhs))
+					return true;
+
+				/* Check to see if this is an iter_var or symb_var */
+				bool isIterSymbVal = false;
+				std::string rhs_string = isSgVarRefExp(rhs)->get_symbol()->get_name().getString();
+				if( std::find(loop_iter_vec.begin(), loop_iter_vec.end(), rhs_string) != loop_iter_vec.end() )
+					isIterSymbVal = true;
+				else if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), rhs_string) != loop_symb_vec.end() )
+					isIterSymbVal = true;
+
+
+				/* Otherwise, check to make sure there is no reference to another iter_var or symb_var */
+				Rose_STL_Container<SgNode*> v_ref = NodeQuery::querySubTree(lhs, V_SgVarRefExp);
+				for(Rose_STL_Container<SgNode*>::iterator v_it = v_ref.begin(); v_it != v_ref.end(); v_it++)
+				{
+					std::string v_string = isSgVarRefExp(*v_it)->get_symbol()->get_name().getString();
+					
+					/* Check the iter_vec vals */
+					if( std::find(loop_iter_vec.begin(), loop_iter_vec.end(), v_string) != loop_iter_vec.end() )
+						if(isIterSymbVal)
+							return false;
+
+					/* Check the symb_vec vals */
+					if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), v_string) != loop_symb_vec.end() )
+						if(isIterSymbVal)
+							return false;
+
+				}
+			
+				/* If we get here, rhs and lhs dont both refer to iter or symb vars, so just check their affinities */
+				return ( rhs->get_type()->isIntegerType() && affineTestExpr(lhs, loop_nest) );
+
+			}
 
 			/* Otherwise, check to see if both lhs and rhs are affine */
-			return ( affineTestExpr(lhs) && affineTestExpr(rhs) );
+			return ( affineTestExpr(lhs, loop_nest) && affineTestExpr(rhs, loop_nest) );
 		}
+
+		/* Make sure rhs (i.e. divisor) is INT and lhs (i.e. dividend) is affine */
+		if( isSgIntegerDivideOp(expr) || isSgDivideOp(expr) )
+			return ( affineTestExpr(lhs, loop_nest) && isSgIntVal(rhs) );
 	}
 
 	/* If the expression is just a single variable, this is equivalent to 1*i, so it should be affine as long as i is of integer type */

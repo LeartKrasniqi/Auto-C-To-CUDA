@@ -105,7 +105,43 @@ bool normalizeLoop(SgForStatement *loop)
 				return false;
 
 			/* Replace U with (U - L + S)/S */
-			SgExpression *num = SageBuilder::buildAddOp( SageBuilder::buildSubtractOp(U, L) , S);
+			//SgExpression *num = SageBuilder::buildAddOp( SageBuilder::buildSubtractOp(U, L) , S);
+			//SgExpression *new_upper_bound = SageBuilder::buildIntegerDivideOp(num, S);
+			
+			/* Replace U with (U + (S - L))/S in order to help with constant folding (since U can be a variable) */
+
+			/* Handle the case when U is a binary op (ex: U = x+1)
+			   
+			   This only helps for the case when U was originally a var, 
+			   since SageInterface::forLoopNormalization() may add or sub a 1
+			*/
+			SgExpression *num;
+			if(isSgBinaryOp(U))
+			{
+				SgExpression *lhs = isSgBinaryOp(U)->get_lhs_operand();
+				SgExpression *rhs = isSgBinaryOp(U)->get_rhs_operand();
+				
+				/* (x+1)+(S-L) --> x+(1+(S-L)) */
+				if(isSgAddOp(U))
+				{
+					SgExpression *intermed = SageBuilder::buildAddOp(rhs, SageBuilder::buildSubtractOp(S, L) );
+					num = SageBuilder::buildAddOp(lhs, intermed);
+				}
+
+				/* (x-1)+(S-L) --> x+(S-(1+L)) */
+				else if(isSgSubtractOp(U))
+				{
+					SgExpression *intermed = SageBuilder::buildSubtractOp(S, SageBuilder::buildAddOp(rhs, L) );
+					num = SageBuilder::buildAddOp(lhs, intermed);
+				}
+				/* Just leave U as is */
+				else
+					num = SageBuilder::buildAddOp(U, SageBuilder::buildSubtractOp(S,L) );
+			}
+			else
+				num = SageBuilder::buildAddOp(U, SageBuilder::buildSubtractOp(S,L) );
+
+			
 			SgExpression *new_upper_bound = SageBuilder::buildIntegerDivideOp(num, S);
 
 			/* Replace test expression */
