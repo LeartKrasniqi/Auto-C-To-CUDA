@@ -3,6 +3,7 @@
 #include "./include/loop_attr.hpp"
 #include "./include/normalize/normalize.hpp"
 #include "./include/affine/affine.hpp"
+#include "./include/dependency/dependency.hpp"
 #define DEBUG 1
 
 
@@ -112,17 +113,18 @@ int main(int argc, char **argv)
 			/* Affine test */
 			if(!affineTest(loop_nest))
 			{
-				std::cerr << "NOTAFFINE" << std::endl;
-				//std::cout << "Loop Nest Skipped (Not Affine)" << std::endl;
+				std::cout << "Loop Nest Skipped (Not Affine)" << std::endl;
 				attr->set_nest_flag(false);
 				continue;
 			}
 
 
-			/* TODO: Dependency Tests */
-
-
-			/* TODO: Parallelism Extraction */
+			/* Dependency Tests */
+			if(dependencyExists(loop_nest))
+			{
+				/* TODO: Parallelism Extraction */
+				std::cout << "Dependency Exists" << std::endl;
+			}
 
 			
 			/* TODO: Code Generation */
