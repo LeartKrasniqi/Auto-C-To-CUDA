@@ -9,16 +9,43 @@ bool affineTest(SgForStatement *loop_nest)
 	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
 	std::list<std::string> loop_iter_vec = attr->get_iter_vec();
 	std::list<SgExpression*> loop_bound_vec = attr->get_bound_vec();
-	std::list<std::string> loop_symb_vec = attr->get_symb_vec();	
+	std::list<std::string> loop_symb_vec = attr->get_symb_vec();
+	int loop_nest_size = attr->get_nest_size();	
 	
 	/* Obtain the body of the loop nest (assuming the nest is perfectly nested) */
-	SgStatement *body = loop_nest->get_loop_body();
-	while(isSgForStatement(body))
-		body = isSgForStatement(body)->get_loop_body();
+	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+	SgStatement *body = isSgForStatement(inner_loops[loop_nest_size - 1])->get_loop_body();
 	
+	/* Make sure there are no writes to any of the iter variables (since SageInterface::collectReadWriteVariables() cannot handle these cases due to our normalization) */
+	SgStatementPtrList &stmt_list = isSgBasicBlock(body)->get_statements();
+	for(auto it = stmt_list.begin(); it != stmt_list.end(); it++)
+	{
+		if(!isSgExprStatement(*it))
+			continue;
+		
+		/* Obtain the variable references of LHS of binary op, or operand in a unary op */
+		SgExpression *expr = isSgExprStatement(*it)->get_expression();
+		Rose_STL_Container<SgNode*> var_refs;
+		if( isSgBinaryOp(expr) && !isSgPntrArrRefExp(isSgBinaryOp(expr)->get_lhs_operand()) )
+			var_refs = NodeQuery::querySubTree(isSgBinaryOp(expr)->get_lhs_operand(), V_SgVarRefExp);
+		else if(isSgUnaryOp(expr))
+			var_refs = NodeQuery::querySubTree(isSgUnaryOp(expr)->get_operand(), V_SgVarRefExp);
+		else
+			continue;
+
+		/* Check to see if these references are to any of the iter vals */
+		for(Rose_STL_Container<SgNode*>::iterator v_it = var_refs.begin(); v_it != var_refs.end(); v_it++)
+		{
+			std::string var = isSgVarRefExp(*v_it)->get_symbol()->get_name().getString();
+			if( std::find(loop_iter_vec.begin(), loop_iter_vec.end(), var) != loop_iter_vec.end() )
+				return false;
+		}
+	}
+
+				
 	/* Check to make sure that the values in loop_symb_vec are actually constant (i.e. loop invariant) */
 	std::set<SgInitializedName*> read_vars, write_vars;
-	SageInterface::collectReadWriteVariables(body, read_vars, write_vars);    // Cannot handle a[i++], might need to add additional check 
+	SageInterface::collectReadWriteVariables(body, read_vars, write_vars); 
 	for(std::set<SgInitializedName*>::iterator w_it = write_vars.begin(); w_it != write_vars.end(); w_it++)	
 		if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), (*w_it)->get_name().getString()) != loop_symb_vec.end() )
 		      	return false;	
@@ -36,7 +63,6 @@ bool affineTest(SgForStatement *loop_nest)
 	for(arr_iter = array_refs.begin(); arr_iter != array_refs.end(); arr_iter++)
 	{
 		SgExpression *expr = isSgPntrArrRefExp(*arr_iter)->get_rhs_operand();
-		std::cout << expr->unparseToString() << std::endl;
 		if(expr)
 		{
 			/* Perform any constant folding */
