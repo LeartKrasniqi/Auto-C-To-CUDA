@@ -120,10 +120,23 @@ int main(int argc, char **argv)
 
 
 			/* Dependency Tests */
-			if(dependencyExists(loop_nest))
+			switch(dependencyExists(loop_nest))
 			{
-				/* TODO: Parallelism Extraction */
-				std::cout << "Dependency Exists" << std::endl;
+				case 0: /* TODO: Code Generation */
+					std::cout << "No Dependency Exists" << std::endl;
+					break;
+				
+				case 1: /* TODO: Parallelism Extraction */
+					std::cout << "Dependency Exists" << std::endl;
+					break;
+				
+				case 2: /* Skip Loop Nest */
+					std::cout << "Loop Nest Skipped (Could Not Determine Dependence)" << std::endl;
+				        attr->set_nest_flag(false);
+					continue;
+				
+				default: /* Should not reach here, skip loop to be safe */	
+					continue;
 			}
 
 			
