@@ -84,6 +84,13 @@ bool normalizeLoop(SgForStatement *loop)
 	/* Just to make sure it is a binary op (which should be the case after SageInterface::forLoopNormalization()) */
 	if(test)
 	{
+		/* If test is a >=, replace it with a <= */
+		if(isSgGreaterOrEqualOp(test))
+		{
+			test = SageBuilder::buildLessOrEqualOp(test->get_lhs_operand(), test->get_rhs_operand());
+			loop->set_test_expr(test);
+		}
+		
 		/* The LHS should be the variable reference */
 		SgVarRefExp *test_var = isSgVarRefExp(test->get_lhs_operand());
 
