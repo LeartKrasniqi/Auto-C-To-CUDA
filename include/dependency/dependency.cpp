@@ -472,8 +472,8 @@ bool extractCoeff(SgExpression *expr, std::vector<int> &coeff_vec, int &res, Loo
 					coeff_vec[iter_index] += coeff;
 				}
 			}
-			/* Handles C*(A*i + B) case */
-			else if(isSgAddOp(rhs))
+			/* Handles C*(A*i +/- B) case */
+			else if(isSgAddOp(rhs) || isSgSubtractOp(rhs))
 			{
 								
 				/* Create temporary vector and result value */
@@ -486,10 +486,13 @@ bool extractCoeff(SgExpression *expr, std::vector<int> &coeff_vec, int &res, Loo
 
 				/* Add the new coeffs to existing coeffs, with the appropriate multiplication */
 				for(long unsigned int i = 0; i < coeff_vec.size(); i++)
-					coeff_vec[i] += coeff*temp_coeff_vec[i];
-
-				/* Do the same with the result */
-				res += coeff*temp_res;
+						coeff_vec[i] += coeff*temp_coeff_vec[i];
+				
+				/* Add/Subtract the res */
+				if(isSgAddOp(rhs))
+					res += coeff*temp_res;
+				else
+					res += (-1)*coeff*temp_res;
 
 			}
 			else
@@ -498,11 +501,13 @@ bool extractCoeff(SgExpression *expr, std::vector<int> &coeff_vec, int &res, Loo
 		}
 	}
 
-	/* Case III: Addition */
-	else if(isSgAddOp(expr))
+	/* Case III: Addition (or Subtraction) */
+	else if( isSgAddOp(expr) || isSgSubtractOp(expr) )
 	{
-		SgExpression *lhs = isSgAddOp(expr)->get_lhs_operand();
-		SgExpression *rhs = isSgAddOp(expr)->get_rhs_operand();
+		//SgExpression *lhs = isSgAddOp(expr)->get_lhs_operand();
+		//SgExpression *rhs = isSgAddOp(expr)->get_rhs_operand();
+		SgExpression *lhs = isSgBinaryOp(expr)->get_lhs_operand();
+		SgExpression *rhs = isSgBinaryOp(expr)->get_rhs_operand();
 	
 		/* Create temporary vectors and result values */
 		std::vector<int> temp_coeff_vec_lhs(coeff_vec.size()), temp_coeff_vec_rhs(coeff_vec.size());
@@ -515,14 +520,24 @@ bool extractCoeff(SgExpression *expr, std::vector<int> &coeff_vec, int &res, Loo
 		if(!extractCoeff(rhs, temp_coeff_vec_rhs, temp_res_rhs, attr))
 			return false;
 
-		/* Add the new coeffs to existing coeffs, with the appropriate multiplication */
-		for(long unsigned int i = 0; i < coeff_vec.size(); i++)
-			coeff_vec[i] += temp_coeff_vec_lhs[i] + temp_coeff_vec_rhs[i];
+		/* Add (or subtract) the new coeffs to existing coeffs */
+		if(isSgAddOp(expr))
+		{
+			for(long unsigned int i = 0; i < coeff_vec.size(); i++)
+				coeff_vec[i] += temp_coeff_vec_lhs[i] + temp_coeff_vec_rhs[i];
+			
+			res += temp_res_lhs + temp_res_rhs;
+		}
 
-		/* Do the same with the result */
-		res += temp_res_lhs + temp_res_rhs;
+		else
+		{
+			for(long unsigned int i = 0; i < coeff_vec.size(); i++)
+				coeff_vec[i] += temp_coeff_vec_lhs[i] - temp_coeff_vec_rhs[i];
+			
+			res += temp_res_lhs - temp_res_rhs;
+		}
 	}
-
+	
 	/* Case IV: Iter Var or Symbolic Constant (i.e. 1*i, but not expressed as a multiplication) */
 	else if(isSgVarRefExp(expr))
 	{
