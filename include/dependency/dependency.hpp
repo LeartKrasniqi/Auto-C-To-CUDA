@@ -60,15 +60,18 @@ bool extractCoeff(SgExpression *expr, std::vector<int> &coeff_arr, int &result, 
 
 
 
+
 /* Function that performs GCD test to find out if array references are dependent 
    
    Input: Expressions for the first array reference and the second array reference, Loop nest attribute
    Output: 0 if no integer solutions (i.e. NO DEPENDENCIES), 1 if there are integer solutions (i.e. INCONCLUSIVE) , 2 if skip loop 
    
-   This test is a dep. test, but returns inconclusive most of the time.
+   This test is a simple dep. test, but returns inconclusive most of the time.
    If this test does not return 0, a series of other tests are performed.
 */
 int GCDTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2, LoopNestAttribute *attr);
+
+
 
 
 /* Function that uses the Euclidean Algorithm to find the GCD of a two INTs
@@ -80,5 +83,27 @@ int GCDTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2, Lo
 */
 int euclidGCD(int a, int b);
 
+
+
+
+/* Function that performs the Banerjee Test to determine if array references are dependent
+
+   Input: Expressions for first and second array references, Loop nest attribute
+   Output: 0 if no integer solutions (i.e. NO DEPENDENCIES), 1 if there are integer solutions (i.e. INCONCLUSIVE) , 2 if skip loop 
+
+
+*/
+int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2, LoopNestAttribute *attr);
+
+
+
+
+/* Functions to return positive/negative part of a number 
+ 
+   Input: Number
+   Output: Positive/negative part of that number
+*/
+int pos(int a);
+int neg(int a);
 
 #endif

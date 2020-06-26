@@ -163,11 +163,11 @@ int dependencyExists(SgForStatement *loop_nest)
 			continue;
 		
 		/* Perform Banerjee Test */
-		//test_flag = dependencyTests(read_refs, write_refs, attr, "Banerjee");
-		//if(test_flag == 2)
-			//return test_flag;
-		//else if(test_flag == 0)
-			//continue;
+		test_flag = dependencyTests(read_refs, write_refs, attr, "Banerjee");
+		if(test_flag == 2)
+			return test_flag;
+		else if(test_flag == 0)
+			continue;
 
 	}
 
@@ -245,9 +245,8 @@ int dependencyTests(std::list<std::vector<SgExpression*>> read_refs, std::list<s
 				test_flag = ZIVTest(curr_subscripts, next_subscripts);
 			else if(test_name == "GCD")
 				test_flag = GCDTest(curr_subscripts, next_subscripts, attr);
-			/* TODO: Banerjee Test */
-			//else
-				//test_flag = banerjeeTest(curr_subscripts, next_subscripts, attr);
+			else
+				test_flag = banerjeeTest(curr_subscripts, next_subscripts, attr);
 			
 			/* If we have detected that a dependency may exist or that the loop should be skipped, return immediately */
 			if( (test_flag == 1) || (test_flag == 2) )
@@ -272,9 +271,8 @@ int dependencyTests(std::list<std::vector<SgExpression*>> read_refs, std::list<s
 				test_flag = ZIVTest(write_subscripts, read_subscripts);
 			else if(test_name == "GCD")
 				test_flag = GCDTest(write_subscripts, read_subscripts, attr);
-			/* TODO: Banerjee Test */
-			//else
-				//test_flag = banerjeeTest(write_subscripts, read_subscripts, attr);
+			else
+				test_flag = banerjeeTest(write_subscripts, read_subscripts, attr);
 			
 			/* If we have detected that a dependency may exist or that the loop should be skipped, return immediately */
 			if( (test_flag == 1) || (test_flag == 2) )
@@ -576,3 +574,171 @@ int euclidGCD(int a, int b)
 }
 
 
+/* Perform the Banerjee Test for dependency check */
+int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2, LoopNestAttribute *attr)
+{
+	/* Check to make sure the expression lists are the same size (they should be) */
+	if(ref1.size() != ref2.size())
+	{
+		std::cerr << "Array size mismatch in GCDTest()" << std::endl;
+		return 2;
+	}
+
+	
+	/* Obtain attributes */
+	std::list<std::string> loop_iter_vec = attr->get_iter_vec();
+	std::list<std::string> loop_symb_vec = attr->get_symb_vec();
+	int vec_size = loop_iter_vec.size() + loop_symb_vec.size();
+	
+	/* Extract coefficients from bound expressions (slightly different from extractCoeff() function) */
+	std::list<SgExpression*> loop_bound_vec = attr->get_bound_vec();
+	std::vector<int> bound_vec;
+	for(auto b_it = loop_bound_vec.begin(); b_it != loop_bound_vec.end(); b_it++)
+	{
+		SgExpression *bound = *b_it;
+
+		/* Append INT values to the bound_vec */
+		if(isSgIntVal(bound))
+			bound_vec.push_back(isSgIntVal(bound)->get_value());
+
+		/* Otherwise, check to see if there is a reference to a symb_val */
+		else
+		{	
+			Rose_STL_Container<SgNode*> var_refs = NodeQuery::querySubTree(bound, V_SgVarRefExp);
+			for(auto v_it = var_refs.begin(); v_it != var_refs.end(); v_it++)
+			{
+				std::string var = isSgVarRefExp(*v_it)->get_symbol()->get_name().getString();
+				
+				/* If we find a reference to it, make most conservative assumption for the bound (i.e. INT_MAX) */
+				if( std::find(loop_symb_vec.begin(), loop_symb_vec.end(), var) != loop_symb_vec.end() )
+				{
+					bound_vec.push_back(INT_MAX);
+					break;
+				}
+			}	
+		}
+	}
+
+	/* If the sizes do not match, then we could not extract enough info from loop_bound_vec so the test cannot be completed */
+	if(bound_vec.size() != loop_bound_vec.size())
+		return 2;
+
+	/* Perform the test for each of the subscripts */
+	for(long unsigned int i = 0; i < ref1.size(); i++)
+	{
+		
+		/*
+		***********************************
+	                Extract Coefficients       
+		***********************************
+		*/
+		
+		/* Convert the expressions into a constant-length vector and an int
+
+                   Ex: [A*i+B*j+C] becomes
+		   	[A,B] and C
+
+		   Note: Symb vars are located at the end of the vector
+		*/
+		std::vector<int> a(vec_size), b(vec_size);
+		int a0 = 0, b0 = 0;
+		
+		/* If coeff extraction fails, return 2 to skip the current loop (to be conservative) */
+		if(!extractCoeff(ref1[i], a, a0, attr))
+			return 2;
+		if(!extractCoeff(ref2[i], b, b0, attr))
+			return 2;
+
+		/* diff has the value b0 - a0, which we use in the Banerjee inequality */
+		int diff = b0 - a0;
+
+
+		/*
+		***************************************
+	               Perform the Banerjee Test 
+		***************************************
+		*/
+
+		/* There are three cases to deal with (corresponding to direction vectors) : <, =, >
+		   
+		   Recall:
+		       a holds the coeffs of the first reference
+		       b holds the coeffs of the second reference
+		       diff holds the value of the constant (i.e. not a coeff of an iter or symb var)
+		       bound_vec holds the upper bounds of the loop nest
+		       The lower bound of each loop is 1, due to the normalization steps performed earlier in the analysis
+		
+		   A solution may exist if:   total_LB <= diff <= total_UB
+		   A solution definitely does NOT exists if diff is not bounded by total_LB and total_UB for all three cases
+		*/
+
+		/* Case I: Direction Vector is (<,*) */
+		int total_LB = 0, total_UB = 0;
+		for(long unsigned int idx = 0; idx < a.size(); idx++)
+		{
+			total_LB += (-1)*pos((neg(a[idx]) + b[idx]))*(bound_vec[idx] - 1)  +  (neg(neg(a[idx]) + b[idx]) + pos(a[idx]))  -  b[idx];
+	       	       	total_UB += pos(pos(a[idx]) - b[idx])*(bound_vec[idx] - 1)  -  (neg(pos(a[idx]) - b[idx]) + neg(a[idx]))  -  b[idx];
+		}
+
+		/* If diff is bounded by total_LB and total_UB, then a solution may exist, so continue onto the next pair */
+		if( (total_LB <= diff) && (diff <= total_UB) )
+			continue;
+			
+
+		/* Case II: Direction Vector is (=,*) */
+		total_LB = 0;
+		total_UB = 0;
+		for(long unsigned int idx = 0; idx < a.size(); idx++)
+		{
+			total_LB += (-1)*neg(a[idx] - b[idx])*bound_vec[idx]  +  pos(a[idx] - b[idx]);
+			total_UB += pos(a[idx] - b[idx])*bound_vec[idx]  -  neg(a[idx] - b[idx]);
+		}
+
+		/* Same check for boundedness */
+		if( (total_LB <= diff) && (diff <= total_UB) )
+			continue;
+
+
+		/* Case III: Direction Vector is (>,*) */
+		total_LB = 0;
+		total_UB = 0;
+		for(long unsigned int idx = 0; idx < a.size(); idx++)
+		{
+			total_LB += (-1)*neg(a[idx] - pos(b[idx]))*(bound_vec[idx] - 1)  +  (pos(a[idx] - pos(b[idx])) + neg(b[idx]))  +  a[idx];
+			total_UB += pos(a[idx] + neg(b[idx]))*(bound_vec[idx] - 1)  -  (neg(a[idx] + neg(b[idx])) + pos(b[idx]))  +  a[idx]; 
+		}
+
+		/* Check for boundedness */
+		if( (total_LB <= diff) && (diff <= total_UB) )
+			continue;
+
+		/* If we get here, none of the cases revealed that diff was bounded, so there does not exist a solution */
+		return 0;
+		
+	}
+
+
+
+	/* If we get here, the test is inconclusive, so return 1 */
+	return 1;
+
+}
+
+/* Helper function to get positive part of a number */
+int pos(int a)
+{
+	if(a >= 0)
+		return a;
+	
+	return 0;
+}
+
+
+/* Helper function to get negative part of a number */
+int neg(int a)
+{
+	if(a >= 0)
+	       return 0;
+
+	return (-1)*a;
+}	
