@@ -73,7 +73,6 @@ int dependencyExists(SgForStatement *loop_nest)
 		       arr_ref[0] = [i, j]      arr_ref[0][0] = i     arr_ref[0][1] = j
 		       arr_ref[1] = [i+j, 0]    arr_ref[1][0] = i+j   arr_ref[1][1] = 0
 		*/
-		//std::list<std::vector<SgExpression*>> arr_ref_list;
 		std::list<std::vector<SgExpression*>> arr_read_ref_list {};
 		std::list<std::vector<SgExpression*>> arr_write_ref_list {};
 		std::list<std::list<std::vector<SgExpression*>>> arr_ref_list;
@@ -97,7 +96,6 @@ int dependencyExists(SgForStatement *loop_nest)
 		
 			/* Append the list of expressions to the parent list (i.e. list for this specific variable) */
 			if(dim_info)
-				//arr_ref_list.push_back(*dim_info);
 				arr_read_ref_list.push_back(*dim_info);
 			
 		}
@@ -120,7 +118,6 @@ int dependencyExists(SgForStatement *loop_nest)
 
 			/* Append the list of expressions to the parent list (i.e. list for this specific variable) */
 			if(dim_info)
-				//arr_ref_list.push_back(*dim_info);
 				arr_write_ref_list.push_back(*dim_info);
 		}
 
@@ -659,7 +656,7 @@ int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref
 		***************************************
 		*/
 
-		/* There are three cases to deal with (corresponding to direction vectors) : <, =, >
+		/* There are three cases to deal with (corresponding to direction vectors: (<, =, >) )
 		   
 		   Recall:
 		       a holds the coeffs of the first reference
@@ -672,7 +669,7 @@ int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref
 		   A solution definitely does NOT exists if diff is not bounded by total_LB and total_UB for all three cases
 		*/
 
-		/* Case I: Direction Vector is (<,*) */
+		/* Case I: Direction Vector is < */
 		int total_LB = 0, total_UB = 0;
 		for(long unsigned int idx = 0; idx < a.size(); idx++)
 		{
@@ -685,7 +682,7 @@ int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref
 			continue;
 			
 
-		/* Case II: Direction Vector is (=,*) */
+		/* Case II: Direction Vector is = */
 		total_LB = 0;
 		total_UB = 0;
 		for(long unsigned int idx = 0; idx < a.size(); idx++)
@@ -699,7 +696,7 @@ int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref
 			continue;
 
 
-		/* Case III: Direction Vector is (>,*) */
+		/* Case III: Direction Vector is > */
 		total_LB = 0;
 		total_UB = 0;
 		for(long unsigned int idx = 0; idx < a.size(); idx++)
@@ -712,7 +709,8 @@ int banerjeeTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref
 		if( (total_LB <= diff) && (diff <= total_UB) )
 			continue;
 
-		/* If we get here, none of the cases revealed that diff was bounded, so there does not exist a solution */
+		
+		/* If we get here, diff was not bounded, so there does not exist a solution */
 		return 0;
 		
 	}
