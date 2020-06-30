@@ -13,7 +13,7 @@ CXXFLAGS = -g -O2 -Wall
 
 ROSE_LIBS = $(ROSE_LIB_DIR)/librose.la
 
-PROJ_DEPS = normalize.lo affine.lo dependency.lo
+PROJ_DEPS = normalize.lo affine.lo dependency.lo parallel.lo
 
 translate: $(PROJ_DEPS) ./include/loop_attr.hpp
 	$(ROSE_BUILD)/libtool --mode=link $(CXX) $(CXXFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -o translate.out $(PROJ_DEPS) translate.cpp $(ROSE_LIBS) 
@@ -26,6 +26,9 @@ affine.lo: ./include/affine/affine.cpp ./include/affine/affine.hpp ./include/loo
 
 dependency.lo: ./include/dependency/dependency.cpp ./include/dependency/dependency.hpp ./include/loop_attr.hpp
 	$(ROSE_BUILD)/libtool --mode=compile $(CXX) $(CXXFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -c -o dependency.lo ./include/dependency/dependency.cpp $(ROSE_LIBS)
+
+parallel.lo: ./include/parallel/parallel.cpp ./include/parallel/parallel.hpp ./include/loop_attr.hpp 
+	$(ROSE_BUILD)/libtool --mode=compile $(CXX) $(CXXFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -c -o parallel.lo ./include/parallel/parallel.cpp $(ROSE_LIBS) 
 
 clean:
 	rm *.out *.lo

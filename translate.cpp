@@ -4,6 +4,7 @@
 #include "./include/normalize/normalize.hpp"
 #include "./include/affine/affine.hpp"
 #include "./include/dependency/dependency.hpp"
+#include "./include/parallel/parallel.hpp"
 #define DEBUG 1
 
 
@@ -128,6 +129,8 @@ int main(int argc, char **argv)
 				
 				case 1: /* TODO: Parallelism Extraction */
 					std::cout << "Dependency Exists" << std::endl;
+					extractParallelism(loop_nest);
+
 					break;
 				
 				case 2: /* Skip Loop Nest */
