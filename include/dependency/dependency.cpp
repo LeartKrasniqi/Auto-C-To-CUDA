@@ -128,6 +128,9 @@ int dependencyExists(SgForStatement *loop_nest)
 		arr_dep_info.push_back(arr_ref_list);
 
 	}
+
+	/* Add arr_dep_info as an attribute to the loop nest */
+	attr->set_arr_dep_info(arr_dep_info);
 	
 	/* Use this flags to determine whether a dependency may exist (Initially assume that there are no deps) */
 	int test_flag = 0;
@@ -165,6 +168,8 @@ int dependencyExists(SgForStatement *loop_nest)
 			return test_flag;
 		else if(test_flag == 0)
 			continue;
+		else 
+			return 1;
 
 	}
 
