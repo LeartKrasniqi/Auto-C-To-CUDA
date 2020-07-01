@@ -27,7 +27,7 @@ affine.lo: ./include/affine/affine.cpp ./include/affine/affine.hpp ./include/loo
 dependency.lo: ./include/dependency/dependency.cpp ./include/dependency/dependency.hpp ./include/loop_attr.hpp
 	$(ROSE_BUILD)/libtool --mode=compile $(CXX) $(CXXFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -c -o dependency.lo ./include/dependency/dependency.cpp $(ROSE_LIBS)
 
-parallel.lo: ./include/parallel/parallel.cpp ./include/parallel/parallel.hpp ./include/loop_attr.hpp 
+parallel.lo: ./include/parallel/parallel.cpp ./include/parallel/parallel.hpp ./include/loop_attr.hpp dependency.lo 
 	$(ROSE_BUILD)/libtool --mode=compile $(CXX) $(CXXFLAGS) -I$(ROSE_INCLUDE_DIR) $(BOOST_CPPFLAGS) -c -o parallel.lo ./include/parallel/parallel.cpp $(ROSE_LIBS) 
 
 clean:

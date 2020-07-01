@@ -4,7 +4,7 @@
 #define PAR_EXTRACT
 #include "rose.h"
 #include "../loop_attr.hpp"
-//#include "../dependency/dependency.hpp"
+#include "../dependency/dependency.hpp"
 
 
 /* Class definition to represent dependency graph of a loop nest */
@@ -136,6 +136,9 @@ Graph * getDependencyGraph(SgBasicBlock *body);
 bool extractParallelism(SgForStatement *loop_nest);
 
 
+bool loopFission(SgForStatement *loop_nest);
+
+
 
 /* Perform extended cycle shrinking to extract parallelism from loop with dependencies 
 
@@ -144,7 +147,7 @@ bool extractParallelism(SgForStatement *loop_nest);
 
    This function computes a distance vector for the loop and partitions the body into cycles, which can be executed in parallel
 */
-void extendedCycleShrink(SgForStatement *loop_nest);
+bool extendedCycleShrink(SgForStatement *loop_nest);
 
 
 
