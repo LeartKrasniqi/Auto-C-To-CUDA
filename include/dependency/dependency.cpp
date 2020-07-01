@@ -162,6 +162,7 @@ int dependencyExists(SgForStatement *loop_nest)
 		else if(test_flag == 0)
 			continue;
 		
+
 		/* Perform Banerjee Test */
 		test_flag = dependencyTests(read_refs, write_refs, attr, "Banerjee");
 		if(test_flag == 2)
@@ -304,7 +305,7 @@ int ZIVTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2)
 	{
 		SgExpression *expr1 = ref1[i];
 		SgExpression *expr2 = ref2[i];
-
+		
 		/* If any pair of array subcripts are two different INTs, there cannot possible be data dependence, so return 0 */
 		if(isSgIntVal(expr1) && isSgIntVal(expr2))
 			if( isSgIntVal(expr1)->get_value() != isSgIntVal(expr2)->get_value() )
@@ -387,7 +388,7 @@ int GCDTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2, Lo
 		int gcd = final_coeff_vec[0];
 		for(long unsigned int j = 1; j < final_coeff_vec.size(); j++)
 		{
-			gcd = euclidGCD(final_coeff_vec[i], gcd);
+			gcd = euclidGCD(final_coeff_vec[j], gcd);
 
 			if(gcd == 1)
 				break;
@@ -399,7 +400,7 @@ int GCDTest(std::vector<SgExpression*> ref1, std::vector<SgExpression*> ref2, Lo
 		
 		/* Check if gcd divides final_res evenly.  If not, return 0 (i.e. dependency cannot possibly exist) */
 		if( (final_res % gcd) != 0 )
-		       return 0;	
+		       	return 0;	
 
 		
 	}
