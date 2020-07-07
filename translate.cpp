@@ -8,10 +8,20 @@
 #define DEBUG 1
 
 
+void printMsg(std::string msg)
+{
+	#if DEBUG
+	std::cout << msg << std::endl;
+	#endif
+}
+
 int main(int argc, char **argv)
 {
 	ROSE_INITIALIZE;
 	SgProject *project = frontend(argc, argv);
+
+	/* Obtain the global scope */
+	SgGlobal *globalScope = SageInterface::getFirstGlobalScope(project);
 	
 	/* Get all function definitions */
 	Rose_STL_Container<SgNode*> functions = NodeQuery::querySubTree(project, V_SgFunctionDefinition);
@@ -67,7 +77,8 @@ int main(int argc, char **argv)
 			/* Perform normalization */
 			if(!normalizeLoopNest(loop_nest))
 			{
-				std::cout << "Loop Nest Skipped (Not Normalized)" << std::endl;
+				//std::cout << "Loop Nest Skipped (Not Normalized)" << std::endl;
+				printMsg("Loop Nest Skipped (Not Normalize)");
 				attr->set_nest_flag(false);
 				continue;
 			}
@@ -114,7 +125,8 @@ int main(int argc, char **argv)
 			/* Affine test */
 			if(!affineTest(loop_nest))
 			{
-				std::cout << "Loop Nest Skipped (Not Affine)" << std::endl;
+				//std::cout << "Loop Nest Skipped (Not Affine)" << std::endl;
+				printMsg("Loop Nest Skipped (Not Affine)");
 				attr->set_nest_flag(false);
 				continue;
 			}
@@ -124,17 +136,17 @@ int main(int argc, char **argv)
 			switch(dependencyExists(loop_nest))
 			{
 				case 0: /* TODO: Code Generation */
-					std::cout << "No Dependency Exists" << std::endl;
+					printMsg("No Dependency Exists");
 					break;
 				
 				case 1: /* TODO: Parallelism Extraction */
-					std::cout << "Dependency Exists" << std::endl;
-					extractParallelism(loop_nest);
+					printMsg("Dependency Exists");
+					extractParallelism(loop_nest, globalScope);
 
 					break;
 				
 				case 2: /* Skip Loop Nest */
-					std::cout << "Loop Nest Skipped (Could Not Determine Dependence)" << std::endl;
+					printMsg("Loop Nest Skipped (Could Not Determine Dependence)");
 				        attr->set_nest_flag(false);
 					continue;
 				
@@ -155,6 +167,9 @@ int main(int argc, char **argv)
 
 		func_iter++;
 	}
+
+	/* Obtain translation */
+	project->unparse();
 
 	return 0;
 }
