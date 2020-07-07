@@ -2,6 +2,8 @@
 
 #ifndef PAR_EXTRACT
 #define PAR_EXTRACT
+#include <cmath>
+#include <climits>
 #include "rose.h"
 #include "../loop_attr.hpp"
 #include "../dependency/dependency.hpp"
@@ -22,8 +24,14 @@ class Graph
 		/* Add edge to specific vertex */
 		void addEdge(int vertex, int new_vertex) {adj[vertex].push_back(new_vertex);}
 
+
+		/* Getter function to obtain the array of adjacency lists for the vertices in the graph */
 		std::list<int> * getADJ() {return adj;}
+		
+
+		/* Getter function to obtain size of graph (i.e. number of vertices) */
 		int getSize() {return num_vertices;}	
+
 
 		/* Fills stack with vertices */
 		void fillOrder(int vertex, bool *visited, std::stack<int> &stack)
@@ -121,7 +129,12 @@ class Graph
 };
 
 
-/* Function to get dependency graph of loop nest body */
+/* Function to get dependency graph of loop nest body 
+
+   Input: Body of loop nest
+   Output: Dependency graph listing all flow/true dependencies 
+
+*/
 Graph * getDependencyGraph(SgBasicBlock *body);
 
 
@@ -133,23 +146,46 @@ Graph * getDependencyGraph(SgBasicBlock *body);
    This function creates a dependency graph of the statements in the body of the loop nest.
    Using this graph, it attempts to extract any parallelism.
 */
-bool extractParallelism(SgForStatement *loop_nest);
+bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope);
 
 
+/* Performs loop fission (i.e. splitting up loop into multiple loops) if dependencies allow for it
+   
+   Input: Loop nest
+   Output: true if successful, false if not
+
+   This function will ultimately call a kernel code generation function.
+*/
 bool loopFission(SgForStatement *loop_nest);
 
 
 
 /* Perform extended cycle shrinking to extract parallelism from loop with dependencies 
 
-   Input: Loop nest
+   Input: Loop nest, list of SCCs, list of adj_lists, global_scope info
    Output: true if successful, false if not
 
-   This function computes a distance vector for the loop and partitions the body into cycles, which can be executed in parallel
+   This function computes a distance vector for the loop and partitions the body into cycles, which can be executed in parallel.
+   It also creates two functions, ecsMinFn() and ecsMaxFn() which are used as part of the algorithm, and inserts them into global scope.
+   This function will ultimately call a kernel code generation function.
 */
-bool extendedCycleShrink(SgForStatement *loop_nest);
+bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> scc_list, std::list<int> *adj_list, SgGlobal *globalScope);
 
 
 
+/* Compute Dependence Distance Vector for two array references
+   
+   Input: write reference, read reference, ddv_arr (will be written to), loop nest attribute
+   Output: true if successful, false if not
+
+   This function supports references of the form:   a*i + a0, a*i + b0
+   This function is used by extendedCycleShrink().
+*/
+bool computeDDV(SgPntrArrRefExp *w_arr_ref, SgPntrArrRefExp *r_arr_ref, std::vector<int> *ddv_arr, LoopNestAttribute *attr);
+
+/* Helper functions to obtain useful info from numerical values during the ECS algorithm */
+int getSign(int num);
+double getAbs(double num);
+int getCeil(double num);
 
 #endif
