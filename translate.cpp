@@ -5,6 +5,7 @@
 #include "./include/affine/affine.hpp"
 #include "./include/dependency/dependency.hpp"
 #include "./include/parallel/parallel.hpp"
+#include "./include/kernel/kernel.hpp"
 #define DEBUG 1
 
 
@@ -29,6 +30,12 @@ int main(int argc, char **argv)
 	
 	/* Will hold each of the loop nests */
 	std::list<SgForStatement*> loop_nest_list;
+
+	/* Will hold the id number of nests that will be parallelized (to be used to name kernel function) */
+	int nest_id = 0;
+
+	/* Flag to see if ecsMinFn and ecsMaxFn have been created already (to be used in parallelism extraction) */
+	bool ecs_fn_flag = false;
 	
 	/* Loop through each function definition */
 	while(func_iter != functions.end())
@@ -125,7 +132,6 @@ int main(int argc, char **argv)
 			/* Affine test */
 			if(!affineTest(loop_nest))
 			{
-				//std::cout << "Loop Nest Skipped (Not Affine)" << std::endl;
 				printMsg("Loop Nest Skipped (Not Affine)");
 				attr->set_nest_flag(false);
 				continue;
@@ -135,13 +141,15 @@ int main(int argc, char **argv)
 			/* Dependency Tests */
 			switch(dependencyExists(loop_nest))
 			{
-				case 0: /* TODO: Code Generation */
+				case 0: /* Code Generation */
 					printMsg("No Dependency Exists");
+					kernelCodeGen(loop_nest, globalScope, nest_id);
 					break;
 				
-				case 1: /* TODO: Parallelism Extraction */
+				case 1: /* Parallelism Extraction */
 					printMsg("Dependency Exists");
-					extractParallelism(loop_nest, globalScope);
+					if(!extractParallelism(loop_nest, globalScope, nest_id, ecs_fn_flag))
+						printMsg("Loop Nest Skipped (Could Not Extract Parallelism");
 
 					break;
 				
@@ -155,7 +163,7 @@ int main(int argc, char **argv)
 			}
 
 			
-			/* TODO: Code Generation */
+			
 			
 		}
 
@@ -166,6 +174,16 @@ int main(int argc, char **argv)
 		
 
 		func_iter++;
+	}
+	
+	/* Get all newly created kernel function definitions and add __global__ in front of them */
+	Rose_STL_Container<SgNode*> kernel_fns = NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
+	for(auto k_it = kernel_fns.begin(); k_it != kernel_fns.end(); k_it++)
+	{
+		SgFunctionDeclaration *k_fn = isSgFunctionDeclaration(*k_it);
+		SgFunctionModifier &k_mod = k_fn->get_functionModifier();
+		if(k_mod.isCudaGlobalFunction())
+			SageInterface::addTextForUnparser(k_fn, "__global__ ", AstUnparseAttribute::e_before);
 	}
 
 	/* Obtain translation */
