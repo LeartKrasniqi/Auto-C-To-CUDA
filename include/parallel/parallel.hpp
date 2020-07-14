@@ -140,36 +140,37 @@ Graph * getDependencyGraph(SgBasicBlock *body);
 
 /* Function that attempts to extract parallelism from a loop nest with dependencies 
    
-   Input: Loop nest
+   Input: Loop nest, global scope info, id of nest, flag for creation of ecsMinFn and ecsMaxFn
    Output: true if successful, false if not
  
    This function creates a dependency graph of the statements in the body of the loop nest.
    Using this graph, it attempts to extract any parallelism.
+   It then makes calls to the kernel code generation function defined in ../kernel/kernel.cpp
 */
-bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope);
+bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &nest_id, bool &ecs_fn_flag);
 
 
 /* Performs loop fission (i.e. splitting up loop into multiple loops) if dependencies allow for it
    
-   Input: Loop nest
+   Input: Loop nest, nest id
    Output: true if successful, false if not
 
    This function will ultimately call a kernel code generation function.
 */
-bool loopFission(SgForStatement *loop_nest);
+bool loopFission(SgForStatement *loop_nest, int &nest_id);
 
 
 
 /* Perform extended cycle shrinking to extract parallelism from loop with dependencies 
 
-   Input: Loop nest, list of SCCs, list of adj_lists, global_scope info
+   Input: Loop nest, list of SCCs, list of adj_lists, global_scope info, nest id info, ECS fn flag info
    Output: true if successful, false if not
 
    This function computes a distance vector for the loop and partitions the body into cycles, which can be executed in parallel.
-   It also creates two functions, ecsMinFn() and ecsMaxFn() which are used as part of the algorithm, and inserts them into global scope.
+   It also creates two functions, ecsMinFn() and ecsMaxFn() which are used as part of the algorithm, and inserts them into global scope (If they have not been created already).
    This function will ultimately call a kernel code generation function.
 */
-bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> scc_list, std::list<int> *adj_list, SgGlobal *globalScope);
+bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> scc_list, std::list<int> *adj_list, SgGlobal *globalScope, int &nest_id, bool &ecs_fn_flag);
 
 
 
@@ -187,5 +188,8 @@ bool computeDDV(SgPntrArrRefExp *w_arr_ref, SgPntrArrRefExp *r_arr_ref, std::vec
 int getSign(int num);
 double getAbs(double num);
 int getCeil(double num);
+
+/* Helper function to create the min/max function definitions required for the ECS algorithm */
+void createECSFn(std::string name, SgGlobal *globalScope);
 
 #endif

@@ -3,7 +3,7 @@
 
 
 /* Extract any parallelism in the loop */
-bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope)
+bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &nest_id, bool &ecs_fn_flag)
 {
 	/* Obtain attributes of loop nest */
 	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
@@ -42,17 +42,20 @@ bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope)
 	
 	/* If every SCC contains only one node, then loop is a candidate for loop fission */ 
 	if(multi_scc_list.empty())
-		return loopFission(loop_nest);
+		return loopFission(loop_nest, nest_id);
 
 	/* Otherwise, it is a candidate for extended cycle shrinking */
 //	return extendedCycleShrink(loop_nest, multi_scc_list, dep_graph->getADJ());
-
-	if(extendedCycleShrink(loop_nest, /*multi_scc_list*/scc_list, dep_graph->getADJ(), globalScope))
+#if 0
+	if(extendedCycleShrink(loop_nest, scc_list, dep_graph->getADJ(), globalScope, nest_id, ecs_fn_flag))
 		std::cout << "CYCLE SUCCESS" << std::endl;
 	else
 		std::cout << "CYCLE FAIL" << std::endl;
 
 	return true;
+#endif
+	return extendedCycleShrink(loop_nest, scc_list, dep_graph->getADJ(), globalScope, nest_id, ecs_fn_flag);
+
 }
 
 
@@ -134,7 +137,7 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 
 
 /* Perform loop fusion */
-bool loopFission(SgForStatement *loop_nest)
+bool loopFission(SgForStatement *loop_nest, int &nest_id)
 {
 	/* Obtain attributes of loop nest */
 	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
@@ -221,8 +224,8 @@ bool loopFission(SgForStatement *loop_nest)
 		/* Replace the body with just the single statement */
 		Rose_STL_Container<SgNode*> new_inner_loops = NodeQuery::querySubTree(new_loop_nest, V_SgForStatement);
 		SgForStatement *inner_most_loop = isSgForStatement(isSgForStatement(new_inner_loops[loop_nest_size - 1]));
-		inner_most_loop->set_loop_body(s);
-
+		inner_most_loop->set_loop_body(s);  //TODO: Replace this with kernel code
+		
 		/* Append the new_loop_nest to the created bb */
 		SageInterface::appendStatement(new_loop_nest, bb);
 
@@ -236,7 +239,7 @@ bool loopFission(SgForStatement *loop_nest)
 
 
 /* Perform extended cycle shrinking */
-bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> scc_list, std::list<int> *adj_list, SgGlobal *globalScope)
+bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> scc_list, std::list<int> *adj_list, SgGlobal *globalScope, int &nest_id, bool &ecs_fn_flag)
 {
 	/* Obtain attributes from the loop nest */
 	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
@@ -258,7 +261,14 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 	       Create the min/max function defns -- Will be used in ECS algorithm
 	********************************************************************************
 	*/
+	if(!ecs_fn_flag)
+	{
+		createECSFn("ecsMaxFn", globalScope);
+		createECSFn("ecsMinFn", globalScope);
+		ecs_fn_flag = true;
+	}
 
+#if 0
 	/* Parameter list (will always compare INT to INT) */ 
 	SgName val1 = "val1", val2 = "val2";
 	//SgReferenceType *ref_type1 = SageBuilder::buildReferenceType(SageBuilder::buildIntType());  -- Use this if we want to pass by reference
@@ -299,7 +309,7 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 	SgIfStmt *min_if = SageBuilder::buildIfStmt(min_test, min_true, min_false);
 	SageInterface::prependStatement(min_if, min_body);
 	//SageInterface::prependStatement(min_fn, globalScope); -- Only perform this step if ECS is successful?
-
+#endif
 
 	
 	/* Go through each SCC and try to perform ECS on it */
@@ -475,12 +485,17 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 		       Step 1: Outer-most Serial Loop
 		********************************************
 		*/
-
+		int scc_index = std::distance(scc_list.begin(), scc_it);
+		std::string ecs_serial_index_name = "ecs_serial_index_" + std::to_string(scc_index);
+		
 		/* Introduce a serial loop whose index increases from 1 to min(ceil(abs(bound_vec[i]/loop_ddv[i]))) with stride of 1 */
 		SgVariableDeclaration *serial_init = SageBuilder::buildVariableDeclaration(
-									"ecs_serial_index", 
+									ecs_serial_index_name, 
 									SageBuilder::buildIntType(), 
-									SageBuilder::buildAssignInitializer(SageBuilder::buildIntVal(1)) );
+									SageBuilder::buildAssignInitializer(SageBuilder::buildIntVal(1)),
+			       						loop_nest );
+		
+		SgVarRefExp *ecs_serial_index = SageBuilder::buildVarRefExp(ecs_serial_index_name, loop_nest);
 
 		int min_val = INT_MAX;
 		for(size_t i = 0; i < bound_vec.size(); i++)
@@ -495,11 +510,11 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 
 		SgExprStatement *serial_test = SageBuilder::buildExprStatement(
 									SageBuilder::buildLessOrEqualOp(
-												SageBuilder::buildVarRefExp("ecs_serial_index"),
+												/*SageBuilder::buildVarRefExp(*/ecs_serial_index,
 												SageBuilder::buildIntVal(min_val) ) );
 
 		SgExpression *serial_stride = SageBuilder::buildPlusPlusOp(
-								SageBuilder::buildVarRefExp("ecs_serial_index") );
+								/*SageBuilder::buildVarRefExp(*/ecs_serial_index );
 
 		SgBasicBlock *serial_body = SageBuilder::buildBasicBlock();
 
@@ -520,7 +535,7 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 								SageBuilder::buildIntVal(1),
 								SageBuilder::buildMultiplyOp(
 											SageBuilder::buildSubtractOp(
-														SageBuilder::buildVarRefExp("ecs_serial_index"),
+														/*SageBuilder::buildVarRefExp(*/ecs_serial_index,
 													        SageBuilder::buildIntVal(1) ),
 										        SageBuilder::buildIntVal(loop_ddv[i]) ) );
 			else
@@ -528,7 +543,7 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 								SageBuilder::buildIntVal(bound_vec[i]),
 								SageBuilder::buildMultiplyOp(
 											SageBuilder::buildSubtractOp(
-														SageBuilder::buildVarRefExp("ecs_serial_index"),
+														/*SageBuilder::buildVarRefExp(*/ecs_serial_index,
 													        SageBuilder::buildIntVal(1) ),
 										        SageBuilder::buildIntVal(loop_ddv[i]) ) );
 		}
@@ -710,13 +725,13 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 		/* Make call to SageInterface::fixVariableReferences() due to the buildVarRefExp */
 		SageInterface::fixVariableReferences(serial_loop);
 
+
 		/*
 		******************************************
 		       Append Serial Loop to New BB       
 		******************************************
 		*/
 		SageInterface::appendStatement(serial_loop, bb_new);
-
 	}
 
 	/*
@@ -728,8 +743,8 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 
 	
 	/* Add the max/min function definitions to top of global scope if ECS is successful */
-	SageInterface::prependStatement(max_fn, globalScope); 
-	SageInterface::prependStatement(min_fn, globalScope);
+	//SageInterface::prependStatement(max_fn, globalScope); 
+	//SageInterface::prependStatement(min_fn, globalScope);
 
 	return true;
 }
@@ -864,4 +879,49 @@ int getCeil(double num)
 	return (int)std::ceil(num);		
 }
 
+void createECSFn(std::string name, SgGlobal *globalScope)
+{
+	/* Parameter list (will always compare INT to INT) */ 
+	SgName val1 = "val1", val2 = "val2";
+	SgType *ref_type1 = SageBuilder::buildIntType();
+	SgType *ref_type2 = SageBuilder::buildIntType();
+	SgInitializedName *val1_init = SageBuilder::buildInitializedName(val1, ref_type1);
+	SgInitializedName *val2_init = SageBuilder::buildInitializedName(val2, ref_type2);
+	SgFunctionParameterList *param_list = SageBuilder::buildFunctionParameterList();
+	SageInterface::appendArg(param_list, val1_init); 
+	SageInterface::appendArg(param_list, val2_init);
 
+	/* Function declaration */
+	SgName fn_name = name;
+	SgFunctionDeclaration *fn = SageBuilder::buildDefiningFunctionDeclaration(fn_name, SageBuilder::buildIntType(), param_list, globalScope);
+	SgBasicBlock *fn_body = fn->get_definition()->get_body();
+
+	/* Create statements in body of functions */
+	SgVarRefExp *val1_ref = SageBuilder::buildVarRefExp(val1, fn_body);
+	SgVarRefExp *val2_ref = SageBuilder::buildVarRefExp(val2, fn_body);
+
+	/* The test is the same for min/max fns */
+	SgExpression *fn_test = SageBuilder::buildGreaterThanOp(val1_ref, val2_ref);
+	
+	SgReturnStmt *fn_true, *fn_false;
+
+	/* Set appropriate true/false returns depending on function name */
+	if(name == "ecsMaxFn")
+	{
+		fn_true = SageBuilder::buildReturnStmt(val1_ref);
+		fn_false = SageBuilder::buildReturnStmt(val2_ref);
+	}
+	else
+	{
+		fn_true = SageBuilder::buildReturnStmt(val2_ref);
+		fn_false = SageBuilder::buildReturnStmt(val1_ref);
+	}
+
+	/* Create the if statement and append to body of function */
+	SgIfStmt *if_stmt = SageBuilder::buildIfStmt(fn_test, fn_true, fn_false);
+	SageInterface::prependStatement(if_stmt, fn_body);
+
+	/* Put function definition at the top in global scope */
+	SageInterface::prependStatement(fn, globalScope);
+
+}
