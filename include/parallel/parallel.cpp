@@ -42,7 +42,7 @@ bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &n
 	
 	/* If every SCC contains only one node, then loop is a candidate for loop fission */ 
 	if(multi_scc_list.empty())
-		return loopFission(loop_nest, nest_id);
+		return loopFission(loop_nest, nest_id, globalScope);
 
 	/* Otherwise, it is a candidate for extended cycle shrinking */
 //	return extendedCycleShrink(loop_nest, multi_scc_list, dep_graph->getADJ());
@@ -137,7 +137,7 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 
 
 /* Perform loop fusion */
-bool loopFission(SgForStatement *loop_nest, int &nest_id)
+bool loopFission(SgForStatement *loop_nest, int &nest_id, SgGlobal *globalScope)
 {
 	/* Obtain attributes of loop nest */
 	LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));
@@ -150,6 +150,7 @@ bool loopFission(SgForStatement *loop_nest, int &nest_id)
 
 	/* Build the new basic block which will hold the new loops */
 	SgBasicBlock *bb = SageBuilder::buildBasicBlock();
+	bb->set_parent(loop_nest->get_parent());
 	//SgStatementPtrList &bb_stmts = bb->get_statements();
 
 	/* Only perform fission if every statement is an assign and the LHS is an array reference (to avoid any additional variables or declarations) */
@@ -224,10 +225,15 @@ bool loopFission(SgForStatement *loop_nest, int &nest_id)
 		/* Replace the body with just the single statement */
 		Rose_STL_Container<SgNode*> new_inner_loops = NodeQuery::querySubTree(new_loop_nest, V_SgForStatement);
 		SgForStatement *inner_most_loop = isSgForStatement(isSgForStatement(new_inner_loops[loop_nest_size - 1]));
-		inner_most_loop->set_loop_body(s);  //TODO: Replace this with kernel code
-		
+		//inner_most_loop->set_loop_body(s);  //TODO: Replace this with kernel code
+		inner_most_loop->set_loop_body(SageBuilder::buildBasicBlock(s));
+
 		/* Append the new_loop_nest to the created bb */
+		new_loop_nest->set_parent(loop_nest->get_parent());
 		SageInterface::appendStatement(new_loop_nest, bb);
+
+		/* Make call to kernel generation for new_loop_nest (should be same case as simple code gen) */
+		kernelCodeGenSimple(new_loop_nest, globalScope, nest_id);
 
 	}
 

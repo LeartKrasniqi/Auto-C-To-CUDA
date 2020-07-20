@@ -7,7 +7,7 @@
 #include "rose.h"
 #include "../loop_attr.hpp"
 #include "../dependency/dependency.hpp"
-
+#include "../kernel/kernel.hpp"
 
 /* Class definition to represent dependency graph of a loop nest */
 class Graph
@@ -152,12 +152,12 @@ bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &n
 
 /* Performs loop fission (i.e. splitting up loop into multiple loops) if dependencies allow for it
    
-   Input: Loop nest, nest id
+   Input: Loop nest, nest id, global scope info
    Output: true if successful, false if not
 
    This function will ultimately call a kernel code generation function.
 */
-bool loopFission(SgForStatement *loop_nest, int &nest_id);
+bool loopFission(SgForStatement *loop_nest, int &nest_id, SgGlobal *globalScope);
 
 
 
