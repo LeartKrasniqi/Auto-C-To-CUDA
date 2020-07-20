@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 			{
 				case 0: /* Code Generation */
 					printMsg("No Dependency Exists");
-					kernelCodeGen(loop_nest, globalScope, nest_id);
+					kernelCodeGenSimple(loop_nest, globalScope, nest_id);
 					break;
 				
 				case 1: /* Parallelism Extraction */
@@ -176,7 +176,7 @@ int main(int argc, char **argv)
 		func_iter++;
 	}
 	
-	/* Get all newly created kernel function definitions and add __global__ in front of them */
+	/* Get all newly created kernel function definitions and add __global__ or __device__ in front of them */
 	Rose_STL_Container<SgNode*> kernel_fns = NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
 	for(auto k_it = kernel_fns.begin(); k_it != kernel_fns.end(); k_it++)
 	{
@@ -184,7 +184,14 @@ int main(int argc, char **argv)
 		SgFunctionModifier &k_mod = k_fn->get_functionModifier();
 		if(k_mod.isCudaGlobalFunction())
 			SageInterface::addTextForUnparser(k_fn, "__global__ ", AstUnparseAttribute::e_before);
+		else if(k_mod.isCudaDevice())
+			SageInterface::addTextForUnparser(k_fn, "__device__ ", AstUnparseAttribute::e_before);
 	}
+
+	/* #define the CUDA_BLOCKs */
+	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_X 128");
+	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_Y 1");
+	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_Z 1");
 
 	/* Obtain translation */
 	project->unparse();
