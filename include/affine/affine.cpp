@@ -12,6 +12,11 @@ bool affineTest(SgForStatement *loop_nest)
 	std::list<std::string> loop_symb_vec = attr->get_symb_vec();
 	int loop_nest_size = attr->get_nest_size();	
 	
+	/* Check to see if there are any function calls in the loop. If so, return false to remain conservative */
+	Rose_STL_Container<SgNode*> fn_calls = NodeQuery::querySubTree(loop_nest, V_SgFunctionCallExp);
+	if(fn_calls.size() > 0)
+		return false;
+	
 	/* Obtain the body of the loop nest (assuming the nest is perfectly nested) */
 	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
 	SgStatement *body = isSgForStatement(inner_loops[loop_nest_size - 1])->get_loop_body();
