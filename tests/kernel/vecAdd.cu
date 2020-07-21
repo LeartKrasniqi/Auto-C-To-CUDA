@@ -1,9 +1,8 @@
 #define CUDA_BLOCK_X 128
 #define CUDA_BLOCK_Y 1
 #define CUDA_BLOCK_Z 1
-__global__ 
 
-void _auto_kernel_0(int a[100000],int b[100000],int c[100000])
+__global__ void _auto_kernel_0(int a[100000],int b[100000],int c[100000])
 {
   int thread_x_id;thread_x_id = blockIdx.x * blockDim.x + threadIdx.x;
   if (thread_x_id) 

@@ -8,7 +8,7 @@ void kernelCodeGenSimple(SgForStatement *loop_nest, SgGlobal *globalScope, int &
 	/* Build the basic block which will replace the loop nest */
 	SgBasicBlock *bb_new = SageBuilder::buildBasicBlock();
 	bb_new->set_parent(loop_nest->get_parent());
-
+#if 0
 	/* Obtain the iter_vars and bound_exprs for the loop nest -- Cannot just use loop attr because we have made transformations */
 	std::vector<std::string> iter_vec;
 	std::vector<SgExpression*> bound_vec;
@@ -71,7 +71,20 @@ void kernelCodeGenSimple(SgForStatement *loop_nest, SgGlobal *globalScope, int &
 	for(auto s_it = symb_vec.begin(); s_it != symb_vec.end(); s_it++)
 		param_vars.insert(*s_it);
 
-	
+#endif	
+	/* Obtain relevant info from the loop nest */
+	std::vector<std::string> iter_vec;
+	std::vector<SgExpression*> bound_vec;
+	std::vector<SgInitializedName*> symb_vec;
+	std::set<SgInitializedName*> param_vars;
+	if(!getLoopInfo(loop_nest, loop_nest, iter_vec, bound_vec, symb_vec, param_vars))
+		return;
+
+	/* Obtain loop_nest body -- A copy of this will be used in the body of the kernel function */
+	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+	SgBasicBlock *body = isSgBasicBlock(isSgForStatement(inner_loops[inner_loops.size() - 1])->get_loop_body());
+	SgBasicBlock *kernel_body = isSgBasicBlock(SageInterface::copyStatement(body));
+
 	/* Define kernel function */
 	kernelFnDef(loop_nest, iter_vec, bound_vec, param_vars, kernel_body, nest_id, globalScope);
 	
@@ -83,7 +96,7 @@ void kernelCodeGenSimple(SgForStatement *loop_nest, SgGlobal *globalScope, int &
 			continue;
 
 		SgExpression *num_bytes = kernelCUDAMalloc(bb_new, *p_it, isSgBasicBlock(loop_nest->get_parent()));
-	
+		
 		bytes_map[(*p_it)->get_name().getString()] = num_bytes;
 	}
 	
@@ -116,6 +129,150 @@ void kernelCodeGenSimple(SgForStatement *loop_nest, SgGlobal *globalScope, int &
 
 	/* Don't forget to update the nest_id */
 	nest_id += 1;
+}
+
+/* Driver function to generate CUDA for ECS cases */
+SgStatement * kernelCodeGenECS(SgForStatement *serial_loop, std::vector<SgForStatement*> parallel_loops, std::vector<SgBasicBlock*> parallel_loop_bbs, int &nest_id, SgGlobal* globalScope)
+{
+	/* Map which will hold the bytes expression for the cudaMalloc() for each array */	
+	std::map<SgInitializedName*, SgExpression*> bytes_map;
+
+	/* Basic block which will hold the cudaMalloc()s, cudaMemcpy()s, serial_loop, parallel_loops, and final cudaMemcpy()s */
+	SgBasicBlock *bb_main = SageBuilder::buildBasicBlock();
+	bb_main->set_parent(serial_loop->get_parent());
+
+	/* Save the initial nest id, for the comment which will go above the bb when the code is generated */
+	int init_nest_id = nest_id;
+	for(auto pl_it = parallel_loops.begin(); pl_it != parallel_loops.end(); pl_it++)
+	{
+		SgForStatement *curr_loop_nest = *pl_it;
+		int bb_idx = std::distance(parallel_loops.begin(), pl_it);	
+			
+		/* Get relevant info for the loop nest -- Handle this a bit differently than simple case, due to weird thing with findReadWriteVariables() */
+		std::vector<std::string> iter_vec;
+		std::vector<SgExpression*> bound_vec;
+		std::vector<SgInitializedName*> symb_vec;	
+		std::set<SgInitializedName*> param_vars;
+		if(!getLoopInfo(curr_loop_nest, parallel_loop_bbs[bb_idx], iter_vec, bound_vec, symb_vec, param_vars)) // pass parallel_loop_bbs[i] as loop_body
+			return serial_loop;
+			
+	
+		/* Obtain loop_nest body -- A copy of this will be used in the body of the kernel function */
+		Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(curr_loop_nest, V_SgForStatement);
+		SgBasicBlock *body = isSgBasicBlock(isSgForStatement(inner_loops[inner_loops.size() - 1])->get_loop_body());
+		SgBasicBlock *kernel_body = isSgBasicBlock(SageInterface::copyStatement(body));
+		
+		/* Create the kernel definition */
+		kernelFnDef(curr_loop_nest, iter_vec, bound_vec, param_vars, kernel_body, nest_id, globalScope);
+		
+		/* Perform the cudaMalloc() and cudaMemcpy() only ONCE (for each array), since all the statements refer to the same arrays */
+		int index = std::distance(parallel_loops.begin(), pl_it);
+		if(index == 0)
+		{
+			for(auto p_it = param_vars.begin(); p_it != param_vars.end(); p_it++)
+			{
+				if(!isSgArrayType((*p_it)->get_type()))
+					continue;
+
+				SgExpression *num_bytes = kernelCUDAMalloc(bb_main, *p_it, isSgBasicBlock(serial_loop->get_parent()));
+		
+				bytes_map[(*p_it)] = num_bytes;
+			}
+		}
+
+		/* Make the kernel call */
+		std::vector<SgStatement*> kernel_stmts = kernelFnCall(curr_loop_nest, param_vars, nest_id);
+		
+		/* Replace curr_loop_nest with the kernel_stmts */
+		SgBasicBlock *bb_inner = SageBuilder::buildBasicBlock();
+		bb_inner->set_parent(bb_main);
+		SageInterface::appendStatementList(kernel_stmts, bb_inner);
+		isSgStatement(curr_loop_nest->get_parent())->replace_statement(curr_loop_nest, bb_inner);
+		
+		/* Increment nest_id */
+		nest_id += 1;
+	}
+	
+	/* Append the serial loop to bb_main */
+	SageInterface::appendStatement(serial_loop, bb_main);
+	
+	/* Perform the d2h cudaMemcpy()s after the serial loop */
+	for(auto p_it = bytes_map.begin(); p_it != bytes_map.end(); p_it++)
+	{
+		if(!isSgArrayType(p_it->first->get_type()))
+			continue;
+
+		SgInitializedName *arr_init_name = p_it->first;
+		std::string arr_name = arr_init_name->get_name().getString(); 
+		std::string d_arr_ptr_name = "d_" + arr_name;
+		std::string memcpy_string = "\n    cudaMemcpy(" + arr_name + ", " + d_arr_ptr_name + ", " + p_it->second->unparseToString() + ", cudaMemcpyDeviceToHost);\n";
+		SageInterface::addTextForUnparser(serial_loop, memcpy_string, AstUnparseAttribute::e_after);	
+	}
+	
+	/* Add comment above first statement, to let user know that the code in this bb was auto-generated */
+	std::string comment = "Auto-generated code for calls to _auto_kernel_" + std::to_string(init_nest_id) + " to _auto_kernel_" + std::to_string(nest_id - 1);
+	SageInterface::attachComment(SageInterface::getFirstStatement(bb_main), comment);	
+
+	return bb_main;
+}
+
+/* Function to obtain parameter variables */
+bool getLoopInfo(SgForStatement *loop_nest, SgStatement *loop_body, std::vector<std::string> &iter_vec, std::vector<SgExpression*> &bound_vec, std::vector<SgInitializedName*> &symb_vec, std::set<SgInitializedName*> &param_vars)
+{
+	/* Obtain the iter_vars and bound_exprs for the loop nest -- Cannot just use loop attr because we have made transformations */
+	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+	for(auto inner_it = inner_loops.begin(); inner_it != inner_loops.end(); inner_it++)
+	{
+		SgForStatement *l = isSgForStatement(*inner_it);
+
+		/* Iteration variables */
+		iter_vec.push_back( SageInterface::getLoopIndexVariable(l)->get_name().getString() );
+														
+		/* Bounds Expressions */
+		SgExpression *bound = isSgBinaryOp(l->get_test_expr())->get_rhs_operand();
+		bound_vec.push_back(bound);
+
+		/* Symbolic variables */
+		Rose_STL_Container<SgNode*> v = NodeQuery::querySubTree(bound, V_SgVarRefExp);
+		for(auto v_it = v.begin(); v_it != v.end(); v_it++)
+		{
+			SgInitializedName *var_name = isSgVarRefExp(*v_it)->get_symbol()->get_declaration();
+																										
+			/* Keep only unique vars */
+			if( std::find(symb_vec.begin(), symb_vec.end(), var_name) != symb_vec.end() )
+				continue;
+			else	
+				symb_vec.push_back(var_name);
+		}
+	}
+		
+	/* Find read/write vars so that we copy the proper variables to the GPU */
+	std::set<SgInitializedName*> reads, writes;
+	//SageInterface::collectReadWriteVariables(loop_nest, reads, writes);
+	SageInterface::collectReadWriteVariables(loop_body, reads, writes);
+	
+	/* If there are no arrays in the writes, skip the loop */
+	bool arr_writes = false;
+	for(auto w_it = writes.begin(); w_it != writes.end(); w_it++)
+		if( isSgArrayType((*w_it)->get_type()) )
+			arr_writes = true;
+	
+	if(!arr_writes)
+		return false;
+
+	/* Append to the set that will only include relevant variables and removes duplicates */
+	for(auto r_it = reads.begin(); r_it != reads.end(); r_it++)
+		if( std::find(iter_vec.begin(), iter_vec.end(), (*r_it)->get_name().getString()) == iter_vec.end() )
+			param_vars.insert(*r_it);
+
+	for(auto w_it = writes.begin(); w_it != writes.end(); w_it++)
+		if( std::find(iter_vec.begin(), iter_vec.end(), (*w_it)->get_name().getString()) == iter_vec.end() )
+			param_vars.insert(*w_it);
+
+	for(auto s_it = symb_vec.begin(); s_it != symb_vec.end(); s_it++)
+		param_vars.insert(*s_it);
+
+	return true;
 }
 
 /* Make the call to the kernel */
@@ -248,7 +405,8 @@ void kernelFnDef(SgForStatement *loop_nest, std::vector<std::string> iter_vec, s
 	/* Create the function declaration and apply function modifier to make it a global kernel function */
 	SgFunctionDeclaration *kernel_fn = SageBuilder::buildDefiningFunctionDeclaration(kernel_name, SageBuilder::buildVoidType(), kernel_params, globalScope);
 	SgFunctionModifier &kernel_mod = kernel_fn->get_functionModifier();
-	kernel_mod.setCudaGlobalFunction();
+	//kernel_mod.setCudaGlobalFunction();
+	kernel_mod.setCudaKernel();
 
 	/* Add statements to body of kernel function */
 	SgBasicBlock *kernel_body = kernel_fn->get_definition()->get_body();

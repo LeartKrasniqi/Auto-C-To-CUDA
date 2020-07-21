@@ -177,6 +177,7 @@ int main(int argc, char **argv)
 	}
 	
 	/* Get all newly created kernel function definitions and add __global__ or __device__ in front of them */
+	/*
 	Rose_STL_Container<SgNode*> kernel_fns = NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
 	for(auto k_it = kernel_fns.begin(); k_it != kernel_fns.end(); k_it++)
 	{
@@ -186,7 +187,7 @@ int main(int argc, char **argv)
 			SageInterface::addTextForUnparser(k_fn, "__global__ ", AstUnparseAttribute::e_before);
 		else if(k_mod.isCudaDevice())
 			SageInterface::addTextForUnparser(k_fn, "__device__ ", AstUnparseAttribute::e_before);
-	}
+	}*/
 
 	/* #define the CUDA_BLOCKs */
 	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_X 128");

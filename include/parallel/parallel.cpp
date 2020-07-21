@@ -525,7 +525,7 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 		SgBasicBlock *serial_body = SageBuilder::buildBasicBlock();
 
 		SgForStatement *serial_loop = SageBuilder::buildForStatement(serial_init, serial_test, serial_stride, serial_body);
-
+		serial_loop->set_parent(loop_nest->get_parent());
 		/*
 		*************************************************************
 		       Step 2: Inner Serial Loop to Find Proper Bounds
@@ -560,6 +560,9 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 		*******************************************************
 		*/
 		SgBasicBlock *serial_inner_bb = SageBuilder::buildBasicBlock();
+		serial_inner_bb->set_parent(loop_nest->get_parent());
+		std::vector<SgForStatement*> parallel_loops;
+		std::vector<SgBasicBlock*> parallel_loop_bbs;
 		for(size_t i = 0; i < loop_iter_vec.size(); i++)
 		{
 			/* If for some reason we missed loop_ddv[i] being zero, return false here */
@@ -643,7 +646,7 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 			/* Create the curr_loop body, and the loop itself */
 			SgBasicBlock *curr_body = SageBuilder::buildBasicBlock();
 			SgForStatement *curr_loop = SageBuilder::buildForStatement(curr_init, curr_test, curr_stride->get_expression(), curr_body);
-
+			curr_loop->set_parent(loop_nest->get_parent());
 			/*
 			    Then, introduce n-1 for loops with loop_iter_vec[j] where i != j
 			    If j < i, loop_ddv[i] > 0 bounds is start[i] + loop_ddv[i] to bound_vec[i]
@@ -707,37 +710,47 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 				}
 
 				new_inner_loop = SageBuilder::buildForStatement(inner_init, inner_test, inner_stride, inner_body);
-
+				
 				/* Set the body of the old inner most loop as the new inner most loop */
 				inner_loop->set_loop_body(new_inner_loop);
 			}
 
 			/* Now, set the body of the inner most loop as the kernel call for the SCC statements */
 			Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(curr_loop, V_SgForStatement);
+			for(auto l_it = inner_loops.begin(); l_it != inner_loops.end(); l_it++)
+				(*l_it)->set_parent(serial_loop);
+				
 			SgForStatement *inner_loop = isSgForStatement(inner_loops.back());
 			SgBasicBlock *inner_bb = SageBuilder::buildBasicBlock();
+			inner_bb->set_parent(loop_nest->get_parent());	
 			for(auto v_it = scc.begin(); v_it != scc.end(); v_it++)
 				SageInterface::appendStatement(stmts[*v_it], inner_bb);  // TODO: Kernel call here 
 			inner_loop->set_loop_body(inner_bb);
 
+			
+			//inner_loop->set_parent(serial_loop);
 			/* Append the current loop to the serial_inner_bb */
-			SageInterface::appendStatement(curr_loop, serial_inner_bb);
- 
+			SageInterface::appendStatement(curr_loop, serial_inner_bb);  //-- This works for ECS without kernel gen, commenting out to test out kernel gen	
+			parallel_loop_bbs.push_back(inner_bb);	
+			parallel_loops.push_back(curr_loop);
+
 		}
 
 		/* Set body of serial_loop to serial_inner_bb */
-		serial_loop->set_loop_body(serial_inner_bb);
-
+		serial_loop->set_loop_body(serial_inner_bb);  //-- This works for ECS without kernel gen, commenting out to test out kernel gen
+		
 		/* Make call to SageInterface::fixVariableReferences() due to the buildVarRefExp */
 		SageInterface::fixVariableReferences(serial_loop);
-
+		
+		SgBasicBlock *kernel_bb = isSgBasicBlock(kernelCodeGenECS(serial_loop, parallel_loops, parallel_loop_bbs, nest_id, globalScope));
 
 		/*
 		******************************************
 		       Append Serial Loop to New BB       
 		******************************************
 		*/
-		SageInterface::appendStatement(serial_loop, bb_new);
+		//SageInterface::appendStatement(serial_loop, bb_new);  -- This works for ECS without kernel gen, commenting out to test out kernel gen
+		SageInterface::appendStatement(kernel_bb, bb_new);
 	}
 
 	/*
@@ -901,6 +914,11 @@ void createECSFn(std::string name, SgGlobal *globalScope)
 	SgName fn_name = name;
 	SgFunctionDeclaration *fn = SageBuilder::buildDefiningFunctionDeclaration(fn_name, SageBuilder::buildIntType(), param_list, globalScope);
 	SgBasicBlock *fn_body = fn->get_definition()->get_body();
+	
+	/* Set as CUDA function so it can be called by device and host */
+	SgFunctionModifier &fn_mod = fn->get_functionModifier();
+	fn_mod.setCudaDevice();
+	fn_mod.setCudaHost();
 
 	/* Create statements in body of functions */
 	SgVarRefExp *val1_ref = SageBuilder::buildVarRefExp(val1, fn_body);
