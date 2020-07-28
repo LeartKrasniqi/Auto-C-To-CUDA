@@ -6,6 +6,7 @@
 #include "./include/dependency/dependency.hpp"
 #include "./include/parallel/parallel.hpp"
 #include "./include/kernel/kernel.hpp"
+#include "./include/preprocess/preprocess.hpp"
 #define DEBUG 1
 
 
@@ -43,6 +44,29 @@ int main(int argc, char **argv)
 		/* Get the actual definition node */
 		SgFunctionDefinition* defn = isSgFunctionDefinition(*func_iter);
 
+		/* Query for any while loops and try to convert them into for loops */
+		Rose_STL_Container<SgNode*> whileLoops = NodeQuery::querySubTree(defn, V_SgWhileStmt);
+		for(auto while_iter = whileLoops.begin(); while_iter != whileLoops.end(); /* EMPTY -- Increment at end of loop */)
+		{
+			/* Get the outer most while loop */
+			SgWhileStmt *loop_nest = isSgWhileStmt(*while_iter);
+
+			/* Find loop nest size */
+			Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgWhileStmt);
+			int nest_size = inner_loops.size();
+
+			/* Perform the conversion */
+			SgBasicBlock *for_loop_nest = isSgBasicBlock(convertWhileToFor(loop_nest));
+
+			/* If successful, replace the loop nest with the for_loop */
+			if(for_loop_nest)
+				isSgStatement(loop_nest->get_parent())->replace_statement(loop_nest, for_loop_nest);
+
+			/* Increment to get to next loop nest */
+			while_iter += nest_size;
+		}
+		
+		
 		/* Query for the for loops */
 		Rose_STL_Container<SgNode*> forLoops = NodeQuery::querySubTree(defn,V_SgForStatement);
 		
@@ -74,18 +98,36 @@ int main(int argc, char **argv)
 		{	
 			SgForStatement *loop_nest = *nest_iter;
 			
-			/* TODO: Check if loop nest is perfectly nested */
-			
+			/* Check if loop nest is perfectly nested */
+			Rose_STL_Container<SgNode*> total_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+			bool imperf = false;
+			for(size_t idx = 0; idx < total_loops.size() - 1; idx++)
+			{
+				SgStatementPtrList &loop_stmts = isSgBasicBlock(isSgForStatement(total_loops[idx])->get_loop_body())->get_statements();
+				if(loop_stmts.size() > 1)
+				{
+					printMsg("Imperfect Loop");
+					imperf = true;
+					break;
+				}
+			}
+
+			if(imperf)
+			{
+				//convertImperfToPerf(loop_nest)
+				continue;
+			}
+
 
 			/* Obtain the attribute of the nest */
 			LoopNestAttribute *attr = dynamic_cast<LoopNestAttribute*>(loop_nest->getAttribute("LoopNestInfo"));	
-			
+
 
 			/* Perform normalization */
 			if(!normalizeLoopNest(loop_nest))
 			{
 				//std::cout << "Loop Nest Skipped (Not Normalized)" << std::endl;
-				printMsg("Loop Nest Skipped (Not Normalize)");
+				printMsg("Loop Nest Skipped (Not Normalized)");
 				attr->set_nest_flag(false);
 				continue;
 			}
