@@ -103,7 +103,11 @@ int main(int argc, char **argv)
 			bool imperf = false;
 			for(size_t idx = 0; idx < total_loops.size() - 1; idx++)
 			{
-				SgStatementPtrList &loop_stmts = isSgBasicBlock(isSgForStatement(total_loops[idx])->get_loop_body())->get_statements();
+				SgBasicBlock *body_bb = isSgBasicBlock(isSgForStatement(total_loops[idx])->get_loop_body());
+				if(!body_bb)
+					continue;
+				
+				SgStatementPtrList &loop_stmts = body_bb->get_statements();
 				if(loop_stmts.size() > 1)
 				{
 					printMsg("Imperfect Loop");
@@ -114,8 +118,21 @@ int main(int argc, char **argv)
 
 			if(imperf)
 			{
-				//convertImperfToPerf(loop_nest)
-				continue;
+				std::vector<SgStatement*> perf_loop_nests = convertImperfToPerf(loop_nest);
+				
+				/* If the size is zero, the conversion failed, so move onto the next loop nest */
+				if(perf_loop_nests.size() == 0)
+					continue;
+				
+				/* Otherwise, replace the loop_nest with a bb containing these statements */
+				SgBasicBlock *bb_new = SageBuilder::buildBasicBlock_nfi(perf_loop_nests);
+				bb_new->set_parent(loop_nest->get_parent());
+				isSgStatement(loop_nest->get_parent())->replace_statement(loop_nest, bb_new);
+				
+				// TODO: Move all of this stuff outside of this loop, as part of a 'preprocess' pass
+			
+				continue;	
+				
 			}
 
 
@@ -126,11 +143,11 @@ int main(int argc, char **argv)
 			/* Perform normalization */
 			if(!normalizeLoopNest(loop_nest))
 			{
-				//std::cout << "Loop Nest Skipped (Not Normalized)" << std::endl;
 				printMsg("Loop Nest Skipped (Not Normalized)");
 				attr->set_nest_flag(false);
 				continue;
 			}
+
 			
 			/* Obtain the iteration, bound, and symbolic_constant vectors for the loop nest */
 			std::list<std::string> iter_vec, symb_vec;
@@ -217,19 +234,6 @@ int main(int argc, char **argv)
 
 		func_iter++;
 	}
-	
-	/* Get all newly created kernel function definitions and add __global__ or __device__ in front of them */
-	/*
-	Rose_STL_Container<SgNode*> kernel_fns = NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
-	for(auto k_it = kernel_fns.begin(); k_it != kernel_fns.end(); k_it++)
-	{
-		SgFunctionDeclaration *k_fn = isSgFunctionDeclaration(*k_it);
-		SgFunctionModifier &k_mod = k_fn->get_functionModifier();
-		if(k_mod.isCudaGlobalFunction())
-			SageInterface::addTextForUnparser(k_fn, "__global__ ", AstUnparseAttribute::e_before);
-		else if(k_mod.isCudaDevice())
-			SageInterface::addTextForUnparser(k_fn, "__device__ ", AstUnparseAttribute::e_before);
-	}*/
 
 	/* #define the CUDA_BLOCKs */
 	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_X 128");
