@@ -94,7 +94,8 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 		dep_var_list.push_back(stmt_dep_vars);
 	}
 	
-
+#if 0
+	// This works, just modifying it for more accurate fission handling 
 	/* Go thru each statement again but now check for true/flow dependencies */
 	for(long unsigned int i = 0; i < dep_var_list.size(); i++)
 	{
@@ -130,7 +131,81 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 
 
 	}
+#endif
+#if 1
+	/* Go thru each statement again but now check for true/flow dependencies */
+	for(size_t i = 0; i < dep_var_list.size(); i++)
+	{
+		std::vector<std::set<SgInitializedName*>> stmt_dep_vars = dep_var_list[i];
+		std::set<SgInitializedName*> write_vars = stmt_dep_vars[1];
+		std::set<SgInitializedName*> read_vars = stmt_dep_vars[0];
 
+		/* Go through each write var, make sure its an array var, and check for flow deps */
+		//std::cout << "Checking for flows:" << std::endl;
+		for(auto w_it = write_vars.begin(); w_it != write_vars.end(); w_it++)
+		{
+			/* Skip non-array vars */
+			if(!isSgArrayType((*w_it)->get_type()))
+				continue;
+
+			//std::cout << "W: " << (*w_it)->get_name().getString() << std::endl;	
+			/* Check every succeeding statement for a read of the current array var */
+			for(size_t j = i; j < dep_var_list.size(); j++)
+			{
+				std::vector<std::set<SgInitializedName*>> next_stmt_dep_vars = dep_var_list[j];
+				std::set<SgInitializedName*> next_read_vars = next_stmt_dep_vars[0];
+
+				/* Check for same reference and add to graph if so */
+				for(auto r_it = next_read_vars.begin(); r_it != next_read_vars.end(); r_it++)	
+				{
+					//std::cout << "R: " << (*r_it)->get_name().getString() << std::endl;
+					if( (*w_it) == (*r_it) )
+					{
+						//std::cout << "Adding edge (" << i << "," << j << ")" << std::endl;
+						g->addEdge(i,j);
+						
+					}
+				}
+
+			}
+		}
+		std::cout << std::endl;
+
+		//std::cout << "Checking for anti" << std::endl;
+		/* Now, go thru each read var, make sure its an array var, and check for anti deps */
+		for(auto r_it = read_vars.begin(); r_it != read_vars.end(); r_it++)
+		{
+			/* Skip non-array vars */
+			if(!isSgArrayType((*r_it)->get_type()))
+				continue;
+
+			//std::cout << "R: " << (*r_it)->get_name().getString() << std::endl;
+			/* Check every succeeding statement for a write of the current array var */
+			for(size_t j = i; j < dep_var_list.size(); j++)
+			{
+				std::vector<std::set<SgInitializedName*>> next_stmt_dep_vars = dep_var_list[j];
+				std::set<SgInitializedName*> next_write_vars = next_stmt_dep_vars[1];
+
+				/* Check for same reference and add to graph if so */
+				for(auto w_it = next_write_vars.begin(); w_it != next_write_vars.end(); w_it++)	
+				{
+					//std::cout << "W: " << (*w_it)->get_name().getString() << std::endl;
+
+					if( (*r_it) == (*w_it) )
+					{
+						//std::cout << "Adding edge (" << i << "," << j << ")" << std::endl;
+						//g->addEdge(i,j);
+						g->addEdge(j, i);
+					}
+				}
+
+			}
+		}
+		std::cout << std::endl;
+
+
+	}
+#endif
 	return g;
 
 }
