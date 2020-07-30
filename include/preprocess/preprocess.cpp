@@ -124,3 +124,106 @@ SgStatement * convertWhileToFor(SgWhileStmt *loop_nest)
 	return bb_nest;
 }
 
+
+/* Function to convert imperfectly nested loop into a series of perfectly nested loops */
+std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest)
+{
+	/* Create a vector which will store the perfectly nested for loops */
+	std::vector<SgStatement*> perf_loop_nests;
+
+	/* Obtain the relevant statements (i.e. Statements with reads/writes to arrays) */
+	std::vector<SgStatement*> arr_stmts;
+	Rose_STL_Container<SgNode*> arr_refs = NodeQuery::querySubTree(imperf_loop_nest, V_SgPntrArrRefExp);
+       	for(auto arr_it = arr_refs.begin(); arr_it != arr_refs.end(); arr_it++)
+	{
+		/* Find enclosing statement and append to vector of statements, if not already there */
+		SgStatement *arr_stmt = SageInterface::getEnclosingStatement(*arr_it);
+
+		if( std::find(arr_stmts.begin(), arr_stmts.end(), arr_stmt) == arr_stmts.end() )
+			arr_stmts.push_back(arr_stmt);
+
+	}
+
+	/* Create a pseudo-bb in order to perform some analysis */
+	SgBasicBlock *pseudo_bb = SageBuilder::buildBasicBlock_nfi(arr_stmts);
+	pseudo_bb->set_parent(imperf_loop_nest->get_parent());
+	
+	/* Obtain a graph and the SCCs for the FLOW dependencies */
+	Graph *dep_graph_flow = getDependencyGraph(pseudo_bb);
+	std::list<std::list<int>> scc_list_flow = dep_graph_flow->getSCCs();
+
+	std::cout << "SCCs for body:" << std::endl;
+	for(auto i = scc_list_flow.begin(); i != scc_list_flow.end(); i++)
+	{
+		for(auto ii = (*i).begin(); ii != (*i).end(); ii++)
+			std::cout << *ii << " ";
+		std::cout << std::endl;
+	}
+	std::cout << std::endl;
+
+	/* Much like the loop fission case, if each SCC contains only one node, we can transform the loop into a series of perfectly nested ones */
+	for(auto scc_it = scc_list_flow.begin(); scc_it != scc_list_flow.end(); scc_it++)
+		if((*scc_it).size() > 1)
+			return perf_loop_nests;		/* This should be empty, so okay to return it here */
+
+
+	/* If we get here, we can perform the transformation for each statement in the SCC list */
+	
+	/* Obtain each of the for loops */
+	Rose_STL_Container<SgNode*> for_loops = NodeQuery::querySubTree(imperf_loop_nest, V_SgForStatement);
+
+	/* For each of the loops, obtain the index variable so that we can associate the arr_stmts with the proper loops */
+	std::vector<SgInitializedName*> index_vars;
+	for(auto f_it = for_loops.begin(); f_it != for_loops.end(); f_it++)
+		index_vars.push_back(SageInterface::getLoopIndexVariable(*f_it));
+	
+	/* Go through each arr_stmt and create the proper loop_nest */
+	for(auto arr_it = arr_stmts.begin(); arr_it != arr_stmts.end(); arr_it++)
+	{
+		SgStatement *s = *arr_it;
+
+		/* Set to hold the position of the index variable in index_vars, so we it is sorted and we can construct the proper loop nest */
+	       	std::set<int> index_pos;	
+		
+		/* Find the references to any variables to determine which loop this statement belongs to */
+		Rose_STL_Container<SgNode*> var_refs = NodeQuery::querySubTree(s, V_SgVarRefExp);
+		for(auto v_it = var_refs.begin(); v_it != var_refs.end(); v_it++)
+		{
+			auto var_iter = std::find(index_vars.begin(), index_vars.end(), isSgVarRefExp(*v_it)->get_symbol()->get_declaration());
+			if(var_iter != index_vars.end())
+				index_pos.insert(std::distance(index_vars.begin(), var_iter));
+		}
+
+		/* Now, index_pos holds the positions within index_vars which allows us to get the proper loop */
+		
+		if(index_pos.size() == 0)
+			return std::vector<SgStatement*>();	/* Returning an empty vector to show conversion failed */ 
+
+		/* Go thru index_pos to construct the loop nests */
+		SgForStatement *new_loop_nest; 		
+		for(auto idx_rit = index_pos.rbegin(); idx_rit != index_pos.rend(); idx_rit++)
+		{	
+			/* Copy over new_loop_nest into a temp var */
+			SgForStatement *temp = new_loop_nest;
+
+			/* Set new_loop_nest to the loop we are copying */
+			new_loop_nest = isSgForStatement(SageInterface::copyStatement(isSgStatement(for_loops[*idx_rit])));
+
+			/* If we are dealing with the inner-most loop, set the body to the statement */
+			if(idx_rit == index_pos.rbegin())
+				new_loop_nest->set_loop_body(s);
+			/* Otherwise, set it equal to temp */
+			else
+				new_loop_nest->set_loop_body(temp);
+		}
+
+		/* Add the newly created loop nest to the vector of perfectly nested loops */
+		perf_loop_nests.push_back(new_loop_nest);
+	}
+
+	/* If we get here, we have successfully converted the imperfectly-nested loop into a series of perfectly-nested ones, so return that series */
+	return perf_loop_nests;
+}
+
+
+
