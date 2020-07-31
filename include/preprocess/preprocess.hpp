@@ -32,4 +32,12 @@ SgStatement * convertWhileToFor(SgWhileStmt *loop_nest);
 */
 std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest);
 
+
+/* Function to determine whether a loop nest is perfectly nested
+ 
+   Input: Loop nest
+   Output: true if perfectly nested, false otherwise
+*/
+bool isPerfectlyNested(SgForStatement *loop_nest);
+
 #endif

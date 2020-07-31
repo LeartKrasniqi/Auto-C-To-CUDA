@@ -70,8 +70,41 @@ int main(int argc, char **argv)
 		/* Query for the for loops */
 		Rose_STL_Container<SgNode*> forLoops = NodeQuery::querySubTree(defn,V_SgForStatement);
 		
-		/* Obtain the loop nests */
-		Rose_STL_Container<SgNode*>::const_iterator for_iter = forLoops.begin();
+		/* Check if we can convert any imperf nests into perf ones */
+		auto for_iter = forLoops.begin();
+		while(for_iter != forLoops.end())
+		{
+			/* Get the outer most loop */
+			SgForStatement* loop_nest = isSgForStatement(*for_iter);
+			
+			/* Obtain the size of this nest (so we can properly update for_iter) */
+			Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
+			int nest_size = inner_loops.size();
+
+			/* Check if loop is perfectly nested */
+			if(isPerfectlyNested(loop_nest) == false)
+			{
+				/* Try to convert the nest into a perfect one */
+				std::vector<SgStatement*> perf_loop_nests = convertImperfToPerf(loop_nest);
+				
+				/* If the size is non-zero, the conversion succeeded, so replace the loop_nest with the series of perfectly nested loops */
+				if(perf_loop_nests.size() > 0)
+				{
+					SgBasicBlock *bb_new = SageBuilder::buildBasicBlock_nfi(perf_loop_nests);
+					bb_new->set_parent(loop_nest->get_parent());
+					isSgStatement(loop_nest->get_parent())->replace_statement(loop_nest, bb_new);
+				}
+			
+			}
+
+			/* Move onto the next loop nest */
+			for_iter += nest_size;
+			
+		}
+		
+		/* Re-query to obtain any transformed loop nests */
+		forLoops = NodeQuery::querySubTree(defn, V_SgForStatement);
+		for_iter = forLoops.begin();
 		while(for_iter != forLoops.end())
 		{
 			/* Get the outer most loop */
@@ -99,41 +132,11 @@ int main(int argc, char **argv)
 			SgForStatement *loop_nest = *nest_iter;
 			
 			/* Check if loop nest is perfectly nested */
-			Rose_STL_Container<SgNode*> total_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
-			bool imperf = false;
-			for(size_t idx = 0; idx < total_loops.size() - 1; idx++)
-			{
-				SgBasicBlock *body_bb = isSgBasicBlock(isSgForStatement(total_loops[idx])->get_loop_body());
-				if(!body_bb)
-					continue;
-				
-				SgStatementPtrList &loop_stmts = body_bb->get_statements();
-				if(loop_stmts.size() > 1)
-				{
-					printMsg("Imperfect Loop");
-					imperf = true;
-					break;
-				}
-			}
+			bool perf = isPerfectlyNested(loop_nest);
 
-			if(imperf)
-			{
-				std::vector<SgStatement*> perf_loop_nests = convertImperfToPerf(loop_nest);
-				
-				/* If the size is zero, the conversion failed, so move onto the next loop nest */
-				if(perf_loop_nests.size() == 0)
-					continue;
-				
-				/* Otherwise, replace the loop_nest with a bb containing these statements */
-				SgBasicBlock *bb_new = SageBuilder::buildBasicBlock_nfi(perf_loop_nests);
-				bb_new->set_parent(loop_nest->get_parent());
-				isSgStatement(loop_nest->get_parent())->replace_statement(loop_nest, bb_new);
-				
-				// TODO: Move all of this stuff outside of this loop, as part of a 'preprocess' pass
-			
-				continue;	
-				
-			}
+			/* If the nest is imperfect here (i.e. even after we tried transforming it), skip this nest */
+			if(!perf)			
+				continue;
 
 
 			/* Obtain the attribute of the nest */

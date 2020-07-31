@@ -152,6 +152,7 @@ std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest)
 	Graph *dep_graph_flow = getDependencyGraph(pseudo_bb);
 	std::list<std::list<int>> scc_list_flow = dep_graph_flow->getSCCs();
 
+#if 0
 	std::cout << "SCCs for body:" << std::endl;
 	for(auto i = scc_list_flow.begin(); i != scc_list_flow.end(); i++)
 	{
@@ -160,11 +161,12 @@ std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest)
 		std::cout << std::endl;
 	}
 	std::cout << std::endl;
+#endif
 
 	/* Much like the loop fission case, if each SCC contains only one node, we can transform the loop into a series of perfectly nested ones */
 	for(auto scc_it = scc_list_flow.begin(); scc_it != scc_list_flow.end(); scc_it++)
 		if((*scc_it).size() > 1)
-			return perf_loop_nests;		/* This should be empty, so okay to return it here */
+			return std::vector<SgStatement*>();		/* Return empty vector to indicate failure */
 
 
 	/* If we get here, we can perform the transformation for each statement in the SCC list */
@@ -176,6 +178,14 @@ std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest)
 	std::vector<SgInitializedName*> index_vars;
 	for(auto f_it = for_loops.begin(); f_it != for_loops.end(); f_it++)
 		index_vars.push_back(SageInterface::getLoopIndexVariable(*f_it));
+	
+	/* If there are any writes to a non-array/non-index variable, return an empty list to be conservative */
+	std::set<SgInitializedName*> read_vars, write_vars;
+	SageInterface::collectReadWriteVariables(imperf_loop_nest, read_vars, write_vars);
+	for(auto wv_it = write_vars.begin(); wv_it != write_vars.end(); wv_it++)
+		if(!isSgArrayType((*wv_it)->get_type()))
+			if( std::find(index_vars.begin(), index_vars.end(), *wv_it) == index_vars.end() ) 
+				return std::vector<SgStatement*>();	/* Return empty vector to indicate failure */
 	
 	/* Go through each arr_stmt and create the proper loop_nest */
 	for(auto arr_it = arr_stmts.begin(); arr_it != arr_stmts.end(); arr_it++)
@@ -226,4 +236,30 @@ std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest)
 }
 
 
+/* Function to determine if loop nest is perfectly nested */
+bool isPerfectlyNested(SgForStatement *loop_nest)
+{
+	/* Obtain the loops in the nest */
+	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
 
+	/* Check if loop is imperfectly nested */ 
+	for(size_t idx = 0; idx < inner_loops.size() - 1; idx++)
+	{
+		SgBasicBlock *body_bb = isSgBasicBlock(isSgForStatement(inner_loops[idx])->get_loop_body());
+				
+		if(body_bb)
+		{
+			/* Get the statements in the body of the loop */
+			SgStatementPtrList &loop_stmts = body_bb->get_statements();
+					
+			/* If there is more than one statement in the body, the nest is imperfect */
+			if(loop_stmts.size() > 1)
+				return false;
+
+		}
+	}
+
+	/* If we get here, none of the loops (aside from the inner-most one) had more than one statement, so the loop is perfectly nested */
+	return true;
+
+}
