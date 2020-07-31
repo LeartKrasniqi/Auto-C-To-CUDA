@@ -14,11 +14,11 @@ int dependencyExists(SgForStatement *loop_nest)
 	/* Obtain body of loop nest (assuming it is perfectly nested) */
 	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
 	SgStatement *body = isSgForStatement(inner_loops[loop_nest_size - 1])->get_loop_body();
-
+	
 	/* Obtain the read/write references in the body */
 	std::vector<SgNode*> read_stmts, write_stmts;
 	SageInterface::collectReadWriteRefs(body, read_stmts, write_stmts);
-
+	
 	/* Collect read/write vars in the body */
 	std::set<SgInitializedName*> read_vars, write_vars;
 	SageInterface::collectReadWriteVariables(body, read_vars, write_vars);
@@ -28,6 +28,11 @@ int dependencyExists(SgForStatement *loop_nest)
 	for(std::set<SgInitializedName*>::iterator it = write_vars.begin(); it != write_vars.end(); it++)
 		if(isSgArrayType((*it)->get_type()))
 			dep_vars.insert(*it);
+		
+		/* If there is a write to a non-array, need to return -2 because the loop cannot be parallelized */
+		else
+			return -2;
+
 
 
 

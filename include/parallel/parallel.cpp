@@ -22,7 +22,7 @@ bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &n
 	/* Find strongly connected components in graph */
 	std::list<std::list<int>> scc_list = dep_graph->getSCCs();
 
-#if 1
+#if 0
 	std::cout << "Strongly connected components of body:" << std::endl;
 	for(auto it = scc_list.begin(); it != scc_list.end(); it++)
 	{
@@ -141,7 +141,6 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 		std::set<SgInitializedName*> read_vars = stmt_dep_vars[0];
 
 		/* Go through each write var, make sure its an array var, and check for flow deps */
-		//std::cout << "Checking for flows:" << std::endl;
 		for(auto w_it = write_vars.begin(); w_it != write_vars.end(); w_it++)
 		{
 			/* Skip non-array vars */
@@ -169,9 +168,7 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 
 			}
 		}
-		std::cout << std::endl;
 
-		//std::cout << "Checking for anti" << std::endl;
 		/* Now, go thru each read var, make sure its an array var, and check for anti deps */
 		for(auto r_it = read_vars.begin(); r_it != read_vars.end(); r_it++)
 		{
@@ -179,7 +176,6 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 			if(!isSgArrayType((*r_it)->get_type()))
 				continue;
 
-			//std::cout << "R: " << (*r_it)->get_name().getString() << std::endl;
 			/* Check every succeeding statement for a write of the current array var */
 			for(size_t j = i; j < dep_var_list.size(); j++)
 			{
@@ -188,20 +184,10 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 
 				/* Check for same reference and add to graph if so */
 				for(auto w_it = next_write_vars.begin(); w_it != next_write_vars.end(); w_it++)	
-				{
-					//std::cout << "W: " << (*w_it)->get_name().getString() << std::endl;
-
 					if( (*r_it) == (*w_it) )
-					{
-						//std::cout << "Adding edge (" << i << "," << j << ")" << std::endl;
-						//g->addEdge(i,j);
 						g->addEdge(j, i);
-					}
-				}
-
 			}
 		}
-		std::cout << std::endl;
 
 
 	}
