@@ -29,9 +29,10 @@ int dependencyExists(SgForStatement *loop_nest)
 		if(isSgArrayType((*it)->get_type()))
 			dep_vars.insert(*it);
 		
-		/* If there is a write to a non-array, need to return -2 because the loop cannot be parallelized */
+		/* If there is a write to a non-array and its scope is not the body, need to return -2 because the loop cannot be parallelized */
 		else
-			return -2;
+			if((*it)->get_scope() != isSgScopeStatement(body))
+				return -2;
 
 
 

@@ -1007,6 +1007,12 @@ void createECSFn(std::string name, SgGlobal *globalScope)
 	SageInterface::prependStatement(if_stmt, fn_body);
 
 	/* Put function definition at the top in global scope */
-	SageInterface::prependStatement(fn, globalScope);
+	//SageInterface::prependStatement(fn, globalScope);
+	SgStatement *first_stmt = SageInterface::getFirstStatement(globalScope);
+	if(first_stmt)
+		SageInterface::insertStatementBefore(first_stmt, fn);
+	else
+		SageInterface::prependStatement(fn, globalScope);
+
 
 }

@@ -256,18 +256,27 @@ bool getLoopInfo(SgForStatement *loop_nest, SgStatement *loop_body, std::vector<
 	for(auto w_it = writes.begin(); w_it != writes.end(); w_it++)
 		if( isSgArrayType((*w_it)->get_type()) )
 			arr_writes = true;
-	
 	if(!arr_writes)
 		return false;
+
+	/* Get scope of loop body -- Used to see whether we need to pass a variable as a parameter to the kernel, or if it will be defined there itself */
+	SgScopeStatement *inner_scope = isSgScopeStatement(loop_body);
+	if(isSgForStatement(loop_body))
+	{
+		Rose_STL_Container<SgNode*> temp_inner_loops = NodeQuery::querySubTree(loop_body, V_SgForStatement);
+		inner_scope = isSgScopeStatement(isSgForStatement(temp_inner_loops.back())->get_loop_body());
+	}
 
 	/* Append to the set that will only include relevant variables and removes duplicates */
 	for(auto r_it = reads.begin(); r_it != reads.end(); r_it++)
 		if( std::find(iter_vec.begin(), iter_vec.end(), (*r_it)->get_name().getString()) == iter_vec.end() )
-			param_vars.insert(*r_it);
+			if( (*r_it)->get_scope() != inner_scope )
+				param_vars.insert(*r_it);
 
 	for(auto w_it = writes.begin(); w_it != writes.end(); w_it++)
 		if( std::find(iter_vec.begin(), iter_vec.end(), (*w_it)->get_name().getString()) == iter_vec.end() )
-			param_vars.insert(*w_it);
+			if( (*w_it)->get_scope() != inner_scope )
+				param_vars.insert(*w_it);
 
 	for(auto s_it = symb_vec.begin(); s_it != symb_vec.end(); s_it++)
 		param_vars.insert(*s_it);
@@ -536,7 +545,12 @@ void kernelFnDef(SgForStatement *loop_nest, std::vector<std::string> iter_vec, s
 	SageInterface::fixVariableReferences(kernel_body);
 	
 	/* Prepend function to global scope */
-	SageInterface::prependStatement(kernel_fn, globalScope);
-	
+	//SageInterface::prependStatement(kernel_fn, globalScope);
+	SgStatement *first_stmt = SageInterface::getFirstStatement(globalScope);
+	if(first_stmt)
+		SageInterface::insertStatementBefore(first_stmt, kernel_fn);
+	else
+		SageInterface::prependStatement(kernel_fn, globalScope);
+
 }
 

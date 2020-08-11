@@ -239,9 +239,14 @@ int main(int argc, char **argv)
 	}
 
 	/* #define the CUDA_BLOCKs */
-	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_X 128");
-	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_Y 1");
-	SageBuilder::buildCpreprocessorDefineDeclaration(globalScope, "#define CUDA_BLOCK_Z 1");
+	SgLocatedNode *top_scope = globalScope;
+	SgStatement *first_stmt = SageInterface::getFirstStatement(globalScope);
+	if(first_stmt)
+		top_scope = first_stmt;
+
+	SageBuilder::buildCpreprocessorDefineDeclaration(top_scope, "#define CUDA_BLOCK_X 128");
+	SageBuilder::buildCpreprocessorDefineDeclaration(top_scope, "#define CUDA_BLOCK_Y 1");
+	SageBuilder::buildCpreprocessorDefineDeclaration(top_scope, "#define CUDA_BLOCK_Z 1");
 
 	/* Obtain translation */
 	project->unparse();
