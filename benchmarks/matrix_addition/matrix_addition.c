@@ -2,13 +2,13 @@
 #include <stdio.h>
 #include <math.h>
 
-#define ROWS 100000
-#define COLS 100000
+#define ROWS 5000
+#define COLS 5000
 
 int main()
 {
 	/* Declare three arrays: C = A + B */
-	float A[ROWS][COLS], B[ROWS][COLS], C[ROWS][COLS];
+	static float A[ROWS][COLS], B[ROWS][COLS], C[ROWS][COLS];
 
 	/* Initialize */
 	for(int i = 0; i < ROWS; i++)
