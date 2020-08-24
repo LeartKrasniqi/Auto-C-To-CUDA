@@ -6,7 +6,7 @@
 #include <math.h>
 
 /* Assume N is greater than 4 and a power of 2 */
-#define N 64
+#define N 512
 #define PI2 6.2832
 
 int main()

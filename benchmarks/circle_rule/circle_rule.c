@@ -1,7 +1,7 @@
 /* Computes quadrature rules (i.e. circumference) for unit circle in 2D */
 /* Adapted from: https://people.sc.fsu.edu/~jburkardt/c_src/circle_rule/circle_rule.html */
 #include <stdio.h>
-#define NUM_ANGLES 1000
+#define NUM_ANGLES 100000
 #define PI 3.14159265358
 #define F(x,y) x*y
 

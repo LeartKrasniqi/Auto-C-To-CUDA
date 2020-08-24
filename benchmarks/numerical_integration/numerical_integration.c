@@ -1,6 +1,6 @@
 /* Benchmark that calculate the integral of F(x) over the interval [A,B] */
 #include <stdio.h>
-#define NUM_INTERVALS 10000
+#define NUM_INTERVALS 1000000
 #define F(x) (x)*(x)
 #define A 0
 #define B 10
