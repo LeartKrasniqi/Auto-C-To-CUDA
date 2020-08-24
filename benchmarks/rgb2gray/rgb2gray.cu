@@ -1,15 +1,20 @@
 /* Convert rgb PNG to grayscale */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "./lodepng/lodepng.h"
+#define w 512
+#define h 512
 #define CUDA_BLOCK_X 128
 #define CUDA_BLOCK_Y 1
 #define CUDA_BLOCK_Z 1
 
-__global__ void _auto_kernel_0(int w,int h,unsigned char image[h][4 * w],unsigned char gray_image[h][4 * w])
+__global__ void _auto_kernel_0(unsigned char image[512][2048],unsigned char gray_image[512][2048])
 {
   int thread_x_id;thread_x_id = blockIdx.x * blockDim.x + threadIdx.x;
   int thread_y_id;thread_y_id = blockIdx.y * blockDim.y + threadIdx.y;
   if (thread_x_id && thread_y_id) 
-    if (thread_x_id <= (h + 0) / 1 && thread_y_id <= (4 * w + 3) / 4) {
+    if (thread_x_id <= 512 && thread_y_id <= 512) {
       unsigned char r = image[1 * thread_x_id + -1][4 * thread_y_id + -4];
       unsigned char g = image[1 * thread_x_id + -1][4 * thread_y_id + -3];
       unsigned char b = image[1 * thread_x_id + -1][4 * thread_y_id + -2];
@@ -21,44 +26,50 @@ __global__ void _auto_kernel_0(int w,int h,unsigned char image[h][4 * w],unsigne
     }
 }
 
-int main()
+int main(int argc,char **argv)
 {
   int col;
   int row;
+  if (argc != 2) {
+    fprintf(stderr,"Usage: %s [file]\n",argv[0]);
+    return - 1;
+  }
 /* Obtain image */
-  char *infile = "test.png";
-  int w;
-  int h;
+  char *infile = argv[1];
+  int width;
+  int height;
   unsigned char *lodeimg;
-  unsigned int error = lodepng_decode32_file(&lodeimg,(&w),(&h),infile);
-  unsigned char image[h][4 * w];
-  memcpy(image,lodeimg,(4 * w * h));
+  unsigned int error = lodepng_decode32_file(&lodeimg,(&width),(&height),infile);
+  unsigned char image[512][2048];
+  memcpy(image,lodeimg,1048576);
 /* Holds output */
-  unsigned char gray_image[h][4 * w];
+  unsigned char gray_image[512][2048];
 {
 /* Auto-generated code for call to _auto_kernel_0 */
-    typedef unsigned char _narray_image[4 * w];
+    typedef unsigned char _narray_image[2048];
     _narray_image *d_image;
-    cudaMalloc((void **) &d_image, sizeof(unsigned char ) * h *(4 * w));
-    cudaMemcpy(d_image, image, sizeof(unsigned char ) * h *(4 * w), cudaMemcpyHostToDevice);
-    typedef unsigned char _narray_gray_image[4 * w];
+    cudaMalloc((void **) &d_image, sizeof(unsigned char ) * 512 *(4 * 512));
+    cudaMemcpy(d_image, image, sizeof(unsigned char ) * 512 *(4 * 512), cudaMemcpyHostToDevice);
+    typedef unsigned char _narray_gray_image[2048];
     _narray_gray_image *d_gray_image;
-    cudaMalloc((void **) &d_gray_image, sizeof(unsigned char ) * h *(4 * w));
-    cudaMemcpy(d_gray_image, gray_image, sizeof(unsigned char ) * h *(4 * w), cudaMemcpyHostToDevice);
+    cudaMalloc((void **) &d_gray_image, sizeof(unsigned char ) * 512 *(4 * 512));
+    cudaMemcpy(d_gray_image, gray_image, sizeof(unsigned char ) * 512 *(4 * 512), cudaMemcpyHostToDevice);
     int CUDA_GRID_X;
-    CUDA_GRID_X = (1 + CUDA_BLOCK_X - 1)/CUDA_BLOCK_X;
+    CUDA_GRID_X = (512 + CUDA_BLOCK_X - 1)/CUDA_BLOCK_X;
     int CUDA_GRID_Y;
     CUDA_GRID_Y = (1 + CUDA_BLOCK_Y - 1)/CUDA_BLOCK_Y;
     int CUDA_GRID_Z;
     CUDA_GRID_Z = (1 + CUDA_BLOCK_Z - 1)/CUDA_BLOCK_Z;
     const dim3 CUDA_blockSize(CUDA_BLOCK_X, CUDA_BLOCK_Y, CUDA_BLOCK_Z);
     const dim3 CUDA_gridSize(CUDA_GRID_X, CUDA_GRID_Y, CUDA_GRID_Z);
-    _auto_kernel_0<<<CUDA_gridSize,CUDA_blockSize>>>(w, h, d_image, d_gray_image);
-    cudaMemcpy(image, d_image, sizeof(unsigned char ) * h *(4 * w), cudaMemcpyDeviceToHost);
-    cudaMemcpy(gray_image, d_gray_image, sizeof(unsigned char ) * h *(4 * w), cudaMemcpyDeviceToHost);
+    _auto_kernel_0<<<CUDA_gridSize,CUDA_blockSize>>>(d_image, d_gray_image);
+    cudaMemcpy(image, d_image, sizeof(unsigned char ) * 512 *(4 * 512), cudaMemcpyDeviceToHost);
+    cudaMemcpy(gray_image, d_gray_image, sizeof(unsigned char ) * 512 *(4 * 512), cudaMemcpyDeviceToHost);
   }
 /* Store the output */
-  char *outfile = "test_out.png";
-  error = lodepng_encode32_file(outfile,gray_image,w,h);
+  char *outfile = (malloc(strlen("gray_") + strlen(infile) + 1));
+  strcpy(outfile,"gray_");
+  strcat(outfile,infile);
+  error = lodepng_encode32_file(outfile,gray_image,512,512);
   return 0;
 }

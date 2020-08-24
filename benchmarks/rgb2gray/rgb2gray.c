@@ -1,13 +1,24 @@
 /* Convert rgb PNG to grayscale */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include "./lodepng/lodepng.h"
+#define w 512
+#define h 512
 
-int main()
+int main(int argc, char **argv)
 {
+	if(argc != 2)
+	{
+		fprintf(stderr, "Usage: %s [file]\n", argv[0]);
+		return -1;
+	}
+
 	/* Obtain image */
-	char *infile = "test.png";
-	int w, h;
+	char *infile = argv[1];
+	int width, height;
 	unsigned char *lodeimg;
-	unsigned error = lodepng_decode32_file(&lodeimg, &w, &h, infile);
+	unsigned error = lodepng_decode32_file(&lodeimg, &width, &height, infile);
 	unsigned char image[h][4*w];
 	memcpy(image, lodeimg, 4*w*h);
 
@@ -31,7 +42,9 @@ int main()
 
 	
 	/* Store the output */
-	char *outfile = "test_out.png";
+	char *outfile = malloc( strlen("gray_") + strlen(infile) + 1 );
+	strcpy(outfile, "gray_");
+	strcat(outfile, infile);
 	error = lodepng_encode32_file(outfile, gray_image, w, h);
 
 	return 0;

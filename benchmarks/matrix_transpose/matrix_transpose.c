@@ -1,13 +1,14 @@
 /* Simple program to obtain transpose of a matrix */
 #include <stdio.h>
+#define M 1000
+#define N 500
 int main()
 {
-	int m = 1000;
-	int n = 500;
-
-	char A[m][n];
-	char B[n][m];
+	char A[M][N];
+	char B[N][M];
 	
+	int m = M, n = N;
+
 	/* Initialize */
 	srand(time(0));
 	for(int i = 0; i < m; i++)
