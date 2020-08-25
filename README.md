@@ -32,4 +32,25 @@ Here's a bit of info about the project directories and files:
 * `translate.cpp`: Main driver program
 
 ## <a name="system-description"></a>System Description
-Will be filled in soon...
+With the help of a ROSE-generated AST of the source code, our system performs automatic transcompilation.  
+Here's an overview:
+![System Overview](http://ee.cooper.edu/~krasniqi/thesis/img/sys_overview.png)
+
+There are three main components:
+* **Preprocessing:** Isolate loops that have potential to be parallelized
+  * Loop Nest Conversion: Convert `while` and imperfectly nested `for` loops into perfectly nested loops through simple transformations such as fission
+  * Normalization: Ensure each loop has a lower bound of `1`, a test expression of either `<=`, `>=`, or `!=`, and a stride of `1`
+  * Affinity Testing: Make sure loop nest only contains affine expressions of index variables and symbolic constants
+* **Dependency Testing:** Determine whether data dependencies exist in a loop nest
+  * Construct program dependence graphs for loop nest
+  * For each dependence pair, perform the following conservative tests to determine data independence:
+    * ZIV Test
+    * GCD Test
+    * Banerjee's Test
+* **Code Generation:** Transform source code AST and generate CUDA code 
+  * If dependency tests prove independence, generate a CUDA kernel representing the operations in the loop nest, allocate/copy relevant data, and make kernel call
+  * If dependencies exist, find strongly connected components (SCCs) of program dependence graph
+    * If SCCs allow for it, perform loop fission to remove dependencies and treat each newly created loop as a data-independent case
+    * If fission fails, attempt extended cycle shrinking to extract parallelism
+  * Add some preprocessing `#define`'s for sample CUDA dimensions (these give the user some flexibility for the kernel launch parameters)
+  * Convert transformed AST into CUDA (via ROSE)
