@@ -4,7 +4,7 @@
 
 ## Table of Contents
 * [How To Build/Run](#how-to-run)
-* [Directories](#directories)
+* [Directories and Files](#directories)
 * [System Description](#system-description)
 
 ## <a name="how-to-run"></a>How To Build/Run
@@ -17,8 +17,19 @@
 ./translate.out [input.c] -rose:o [output.cu]
 ```
 
-## <a name="directories"></a>Directories
-Each directory contains methods with detailed explanations.  We give a brief bit of info for each one here:
+## <a name="directories"></a>Directories and Files
+Here's a bit of info about the project directories and files:
+* `benchmarks`: Series of benchmark C programs and their transcompiled CUDA versions
+* `include`: The methods required for the analysis and transformations
+  * `affine`: Checks whether loop nest is affine
+  * `dependency`: Performs dependency analysis 
+  * `kernel`: CUDA code generation
+  * `normalize`: Transform loop nests into a standardized/normalized form
+  * `parallel`: Attempt to extract parallelism from loops with dependencies
+  * `preprocess`: Convert `while` and imperfectly nested `for` loops into perfectly nested loops
+  * `loop_attr.hpp`: Useful ROSE attributes
+* `tests`: A bunch of unit tests for each analysis/transformation stage
+* `translate.cpp`: Main driver program
 
 ## <a name="system-description"></a>System Description
 Will be filled in soon...
