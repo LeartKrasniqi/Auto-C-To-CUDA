@@ -22,18 +22,6 @@ bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &n
 	/* Find strongly connected components in graph */
 	std::list<std::list<int>> scc_list = dep_graph->getSCCs();
 
-#if 0
-	std::cout << "Strongly connected components of body:" << std::endl;
-	for(auto it = scc_list.begin(); it != scc_list.end(); it++)
-	{
-		for(auto it2 = (*it).begin(); it2 != (*it).end(); it2++)
-			std::cout << *it2 << " ";
-
-		std::cout << std::endl;
-	}
-	std::cout << std::endl;
-#endif
-
 	/* Go thru SCC list and obtain SCCs with more than one node */
 	std::list<std::list<int>> multi_scc_list;
 	for(auto scc_it = scc_list.begin(); scc_it != scc_list.end(); scc_it++)
@@ -45,15 +33,6 @@ bool extractParallelism(SgForStatement *loop_nest, SgGlobal *globalScope, int &n
 		return loopFission(loop_nest, nest_id, globalScope);
 
 	/* Otherwise, it is a candidate for extended cycle shrinking */
-//	return extendedCycleShrink(loop_nest, multi_scc_list, dep_graph->getADJ());
-#if 0
-	if(extendedCycleShrink(loop_nest, scc_list, dep_graph->getADJ(), globalScope, nest_id, ecs_fn_flag))
-		std::cout << "CYCLE SUCCESS" << std::endl;
-	else
-		std::cout << "CYCLE FAIL" << std::endl;
-
-	return true;
-#endif
 	return extendedCycleShrink(loop_nest, scc_list, dep_graph->getADJ(), globalScope, nest_id, ecs_fn_flag);
 
 }
@@ -94,45 +73,6 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 		dep_var_list.push_back(stmt_dep_vars);
 	}
 	
-#if 0
-	// This works, just modifying it for more accurate fission handling 
-	/* Go thru each statement again but now check for true/flow dependencies */
-	for(long unsigned int i = 0; i < dep_var_list.size(); i++)
-	{
-		std::vector<std::set<SgInitializedName*>> stmt_dep_vars = dep_var_list[i];
-		std::set<SgInitializedName*> write_vars = stmt_dep_vars[1];
-
-		/* Go through each write var, make sure its an array var, and check for flow deps */
-		for(auto w_it = write_vars.begin(); w_it != write_vars.end(); w_it++)
-		{
-			/* Skip non-array vars */
-			if(!isSgArrayType((*w_it)->get_type()))
-				continue;
-			//std::cout << "W: " << (*w_it)->get_name().getString() << std::endl;	
-			/* Check every statement for a read of the current array var */
-			for(long unsigned int j = 0; j < dep_var_list.size(); j++)
-			{
-				std::vector<std::set<SgInitializedName*>> next_stmt_dep_vars = dep_var_list[j];
-				std::set<SgInitializedName*> read_vars = next_stmt_dep_vars[0];
-
-				/* Check for same reference and add to graph if so */
-				for(auto r_it = read_vars.begin(); r_it != read_vars.end(); r_it++)	
-				{
-					//std::cout << "R: " << (*r_it)->get_name().getString() << std::endl;
-					if( (*w_it) == (*r_it) )
-					{
-						g->addEdge(i,j);
-						
-					}
-				}
-
-			}
-		}
-
-
-	}
-#endif
-#if 1
 	/* Go thru each statement again but now check for true/flow dependencies */
 	for(size_t i = 0; i < dep_var_list.size(); i++)
 	{
@@ -191,13 +131,13 @@ Graph * getDependencyGraph(SgBasicBlock *body)
 
 
 	}
-#endif
+
 	return g;
 
 }
 
 
-/* Perform loop fusion */
+/* Perform loop fission */
 bool loopFission(SgForStatement *loop_nest, int &nest_id, SgGlobal *globalScope)
 {
 	/* Obtain attributes of loop nest */
@@ -212,7 +152,6 @@ bool loopFission(SgForStatement *loop_nest, int &nest_id, SgGlobal *globalScope)
 	/* Build the new basic block which will hold the new loops */
 	SgBasicBlock *bb = SageBuilder::buildBasicBlock();
 	bb->set_parent(loop_nest->get_parent());
-	//SgStatementPtrList &bb_stmts = bb->get_statements();
 
 	/* Only perform fission if every statement is an assign and the LHS is an array reference (to avoid any additional variables or declarations) */
 	for(unsigned long i = 0; i < stmts.size(); i++)
@@ -286,7 +225,6 @@ bool loopFission(SgForStatement *loop_nest, int &nest_id, SgGlobal *globalScope)
 		/* Replace the body with just the single statement */
 		Rose_STL_Container<SgNode*> new_inner_loops = NodeQuery::querySubTree(new_loop_nest, V_SgForStatement);
 		SgForStatement *inner_most_loop = isSgForStatement(isSgForStatement(new_inner_loops[loop_nest_size - 1]));
-		//inner_most_loop->set_loop_body(s);  //TODO: Replace this with kernel code
 		inner_most_loop->set_loop_body(SageBuilder::buildBasicBlock(s));
 
 		/* Append the new_loop_nest to the created bb */
@@ -335,48 +273,6 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 		ecs_fn_flag = true;
 	}
 
-#if 0
-	/* Parameter list (will always compare INT to INT) */ 
-	SgName val1 = "val1", val2 = "val2";
-	//SgReferenceType *ref_type1 = SageBuilder::buildReferenceType(SageBuilder::buildIntType());  -- Use this if we want to pass by reference
-	//SgReferenceType *ref_type2 = SageBuilder::buildReferenceType(SageBuilder::buildIntType());
-	SgType *ref_type1 = SageBuilder::buildIntType();
-	SgType *ref_type2 = SageBuilder::buildIntType();
-	SgInitializedName *val1_init = SageBuilder::buildInitializedName(val1, ref_type1);
-	SgInitializedName *val2_init = SageBuilder::buildInitializedName(val2, ref_type2);
-	SgFunctionParameterList *max_list = SageBuilder::buildFunctionParameterList(), *min_list = SageBuilder::buildFunctionParameterList();
-	SageInterface::appendArg(max_list, val1_init); SageInterface::appendArg(max_list, val2_init);
-	SageInterface::appendArg(min_list, val1_init); SageInterface::appendArg(min_list, val2_init);
-
-	/* Function declaration */
-	SgName max_name = "ecsMaxFn", min_name = "ecsMinFn";
-	SgFunctionDeclaration *max_fn = SageBuilder::buildDefiningFunctionDeclaration(max_name, SageBuilder::buildIntType(), max_list, globalScope);
-	SgFunctionDeclaration *min_fn = SageBuilder::buildDefiningFunctionDeclaration(min_name, SageBuilder::buildIntType(), min_list, globalScope);
-	SgBasicBlock *max_body = max_fn->get_definition()->get_body();
-	SgBasicBlock *min_body = min_fn->get_definition()->get_body();
-
-	/* Create statements in body of functions */
-	SgVarRefExp *val1_ref_max = SageBuilder::buildVarRefExp(val1, max_body);
-	SgVarRefExp *val1_ref_min = SageBuilder::buildVarRefExp(val1, min_body);
-	SgVarRefExp *val2_ref_max = SageBuilder::buildVarRefExp(val2, max_body);
-	SgVarRefExp *val2_ref_min = SageBuilder::buildVarRefExp(val2, min_body);
-
-	/* max function -- if(val1>val2) return val1; else return val2; */
-	SgReturnStmt *max_true = SageBuilder::buildReturnStmt(val1_ref_max);
-	SgReturnStmt *max_false = SageBuilder::buildReturnStmt(val2_ref_max);
-	SgExpression *max_test = SageBuilder::buildGreaterThanOp(val1_ref_max, val2_ref_max);
-	SgIfStmt *max_if = SageBuilder::buildIfStmt(max_test, max_true, max_false);
-	SageInterface::prependStatement(max_if, max_body);
-	//SageInterface::prependStatement(max_fn, globalScope); -- Only perform this step if ECS is successful?
-
-	/* min function -- if(val1<val2) return val1; else return val2; */
-	SgReturnStmt *min_true = SageBuilder::buildReturnStmt(val1_ref_min);
-	SgReturnStmt *min_false = SageBuilder::buildReturnStmt(val2_ref_min);
-	SgExpression *min_test = SageBuilder::buildLessThanOp(val1_ref_min, val2_ref_min);
-	SgIfStmt *min_if = SageBuilder::buildIfStmt(min_test, min_true, min_false);
-	SageInterface::prependStatement(min_if, min_body);
-	//SageInterface::prependStatement(min_fn, globalScope); -- Only perform this step if ECS is successful?
-#endif
 
 	
 	/* Go through each SCC and try to perform ECS on it */
@@ -798,8 +694,8 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 		}
 
 		/* Set body of serial_loop to serial_inner_bb */
-		serial_loop->set_loop_body(serial_inner_bb);  //-- This works for ECS without kernel gen, commenting out to test out kernel gen
-		
+		serial_loop->set_loop_body(serial_inner_bb);
+
 		/* Make call to SageInterface::fixVariableReferences() due to the buildVarRefExp */
 		SageInterface::fixVariableReferences(serial_loop);
 		
@@ -819,12 +715,8 @@ bool extendedCycleShrink(SgForStatement *loop_nest, std::list<std::list<int>> sc
 	       Replace old loop nest with the serial loops
 	*********************************************************
 	*/
-	isSgStatement(loop_nest->get_parent())->replace_statement(loop_nest, bb_new);
-
+	isSgStatement(loop_nest->get_parent())->replace_statement(loop_nest, bb_new);	
 	
-	/* Add the max/min function definitions to top of global scope if ECS is successful */
-	//SageInterface::prependStatement(max_fn, globalScope); 
-	//SageInterface::prependStatement(min_fn, globalScope);
 
 	return true;
 }

@@ -152,17 +152,6 @@ std::vector<SgStatement*> convertImperfToPerf(SgForStatement *imperf_loop_nest)
 	Graph *dep_graph_flow = getDependencyGraph(pseudo_bb);
 	std::list<std::list<int>> scc_list_flow = dep_graph_flow->getSCCs();
 
-#if 0
-	std::cout << "SCCs for body:" << std::endl;
-	for(auto i = scc_list_flow.begin(); i != scc_list_flow.end(); i++)
-	{
-		for(auto ii = (*i).begin(); ii != (*i).end(); ii++)
-			std::cout << *ii << " ";
-		std::cout << std::endl;
-	}
-	std::cout << std::endl;
-#endif
-
 	/* Much like the loop fission case, if each SCC contains only one node, we can transform the loop into a series of perfectly nested ones */
 	for(auto scc_it = scc_list_flow.begin(); scc_it != scc_list_flow.end(); scc_it++)
 		if((*scc_it).size() > 1)

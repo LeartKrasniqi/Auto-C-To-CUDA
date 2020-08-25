@@ -8,70 +8,7 @@ void kernelCodeGenSimple(SgForStatement *loop_nest, SgGlobal *globalScope, int &
 	/* Build the basic block which will replace the loop nest */
 	SgBasicBlock *bb_new = SageBuilder::buildBasicBlock();
 	bb_new->set_parent(loop_nest->get_parent());
-#if 0
-	/* Obtain the iter_vars and bound_exprs for the loop nest -- Cannot just use loop attr because we have made transformations */
-	std::vector<std::string> iter_vec;
-	std::vector<SgExpression*> bound_vec;
-	std::vector<SgInitializedName*> symb_vec;
-	
-	Rose_STL_Container<SgNode*> inner_loops = NodeQuery::querySubTree(loop_nest, V_SgForStatement);
-	for(auto inner_it = inner_loops.begin(); inner_it != inner_loops.end(); inner_it++)
-	{
-		SgForStatement *l = isSgForStatement(*inner_it);
 
-		/* Iteration variables */
-		iter_vec.push_back( SageInterface::getLoopIndexVariable(l)->get_name().getString() );
-														
-		/* Bounds Expressions */
-		SgExpression *bound = isSgBinaryOp(l->get_test_expr())->get_rhs_operand();
-		bound_vec.push_back(bound);
-
-		/* Symbolic variables */
-		Rose_STL_Container<SgNode*> v = NodeQuery::querySubTree(bound, V_SgVarRefExp);
-		for(auto v_it = v.begin(); v_it != v.end(); v_it++)
-		{
-			SgInitializedName *var_name = isSgVarRefExp(*v_it)->get_symbol()->get_declaration();
-																										
-			/* Keep only unique vars */
-			if( std::find(symb_vec.begin(), symb_vec.end(), var_name) != symb_vec.end() )
-				continue;
-			else	
-				symb_vec.push_back(var_name);
-		}
-	}
-	
-	/* Obtain loop_nest body -- A copy of this will be used in the body of the kernel function */
-	SgBasicBlock *body = isSgBasicBlock(isSgForStatement(inner_loops[inner_loops.size() - 1])->get_loop_body());
-	SgBasicBlock *kernel_body = isSgBasicBlock(SageInterface::copyStatement(body));
-
-	/* Find read/write vars so that we copy the proper variables to the GPU */
-	std::set<SgInitializedName*> reads, writes;
-	SageInterface::collectReadWriteVariables(loop_nest, reads, writes);
-	
-	/* If there are no arrays in the writes, skip the loop */
-	bool arr_writes = false;
-	for(auto w_it = writes.begin(); w_it != writes.end(); w_it++)
-		if( isSgArrayType((*w_it)->get_type()) )
-			arr_writes = true;
-
-	if(!arr_writes)
-		return;
-
-	/* Create a new set that only includes relevant variables and removes duplicates */
-	std::set<SgInitializedName*> param_vars;
-
-	for(auto r_it = reads.begin(); r_it != reads.end(); r_it++)
-		if( std::find(iter_vec.begin(), iter_vec.end(), (*r_it)->get_name().getString()) == iter_vec.end() )
-			param_vars.insert(*r_it);
-
-	for(auto w_it = writes.begin(); w_it != writes.end(); w_it++)
-		if( std::find(iter_vec.begin(), iter_vec.end(), (*w_it)->get_name().getString()) == iter_vec.end() )
-			param_vars.insert(*w_it);
-
-	for(auto s_it = symb_vec.begin(); s_it != symb_vec.end(); s_it++)
-		param_vars.insert(*s_it);
-
-#endif	
 	/* Obtain relevant info from the loop nest */
 	std::vector<std::string> iter_vec;
 	std::vector<SgExpression*> bound_vec;

@@ -27,7 +27,6 @@ void kernelCodeGenSimple(SgForStatement *loop_nest, SgGlobal *globalScope, int &
    In the end, the loop nest is replaced by a series of these SgStatement*'s.
 */
 SgStatement * kernelCodeGenECS(SgForStatement *serial_loop, std::vector<SgForStatement*> parallel_loops, std::vector<SgBasicBlock*> parallel_loop_bbs, int &nest_id, SgGlobal* globalScope);
-//SgStatement * kernelCodeGenECS(SgForStatement *serial_loop, std::vector<SgForStatement*> parallel_loops, int &nest_id, SgGlobal* globalScope);
 
 
 /* Function to create kernel definition in global scope 
@@ -71,20 +70,6 @@ std::vector<SgStatement*> kernelFnCall(SgForStatement *loop_nest, std::set<SgIni
    iter_vec, bound_vec, symb_vec, and param_vars are all passed by reference so that we can extract the relevant info with one function call. 
 */
 bool getLoopInfo(SgForStatement *loop_nest, SgStatement *loop_body, std::vector<std::string> &iter_vec, std::vector<SgExpression*> &bound_vec, std::vector<SgInitializedName*> &symb_vec, std::set<SgInitializedName*> &param_vars);
-//bool getLoopInfo(SgForStatement *loop_nest, std::vector<std::string> &iter_vec, std::vector<SgExpression*> &bound_vec, std::vector<SgInitializedName*> &symb_vec, std::set<SgInitializedName*> &param_vars);
-//bool getParamVars(SgForStatement *loop_nest, std::set<SgInitializedName*> &param_vars);
-
-
-
-#if 0
-SgExpression * kernelCUDAMalloc(/*SgForStatement *loop_nest*/ SgBasicBlock *bb, SgInitializedName *arr_name, SgBasicBlock *parentScope);
-
-/*SgBasicBlock * */ std::vector<SgStatement*> kernelFnCall(SgForStatement *loop_nest, std::set<SgInitializedName*> param_vars, int nest_id);
-
-/* Function to create kernel definition */
-//void kernelFnDef(SgForStatement *loop_nest, std::vector<std::string> iter_vec, std::vector<SgExpression*> bound_vec, std::vector<SgInitializedName*> symb_vec, std::set<SgInitializedName*> reads, std::set<SgInitializedName*> writes, SgBasicBlock *body, int nest_id, SgGlobal *globalScope);
-#endif
-
 
 
 #endif

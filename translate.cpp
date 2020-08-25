@@ -1,3 +1,29 @@
+/* 
+   Automatic Transcompiler of Affine C Programs to CUDA
+   Leart Krasniqi
+   August 2020
+   Master's Thesis
+
+   This project accepts an affine C program as input and generates CUDA code.
+   The steps involved are:
+       1) Preprocessing
+           a) Loop Nest Conversion
+	   b) Normalization
+	   c) Affinity Testing
+       2) Dependency Testing
+           a) ZIV Test
+	   b) GCD Test
+	   c) Banerjee's Test
+       3) Code Generation
+           a) Simple Parallelization
+	   b) Loop Fission
+	   c) Extended Cycle Shrinking
+
+   All of the relevant methods with detailed explanations are in the ./include directory
+
+   Usage:  ./translate.out [input.c] -rose:o [output.cu]
+*/  
+
 #include "rose.h"
 #include <iostream>
 #include "./include/loop_attr.hpp"
@@ -7,7 +33,7 @@
 #include "./include/parallel/parallel.hpp"
 #include "./include/kernel/kernel.hpp"
 #include "./include/preprocess/preprocess.hpp"
-#define DEBUG 1
+#define DEBUG 0
 
 
 void printMsg(std::string msg)

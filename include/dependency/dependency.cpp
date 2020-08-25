@@ -178,51 +178,7 @@ int dependencyExists(SgForStatement *loop_nest)
 		else 
 			return 1;
 
-	}
-
-
-
-
-
-#if 0
-	int n1 = 1;
-	for(auto it1 = arr_dep_info.begin(); it1 != arr_dep_info.end(); it1++)
-	{
-		std::cout << "Arr " << n1 << ": " << std::endl;
-		int n2 = 0;
-		for(auto it2 = (*it1).begin(); it2 != (*it1).end(); it2++)
-		{
-			if(!n2)
-				std::cout << "READS: " << std::endl;
-			else
-				std::cout << "WRITES (" << n2 << ")" << std::endl;
-
-			int n3 = 1;
-			for(auto it3 = (*it2).begin(); it3 != (*it2).end(); it3++)
-			{
-				std::cout << "Ref " << n3 << ": " << std::endl;
-				for(auto it4 = (*it3).begin(); it4 != (*it3).end(); it4++)
-					std::cout << (*it4)->unparseToString() << std::endl;
-
-				n3++;
-			}
-			n2++;
-		}
-		n1++;
-	}
-		
-#endif
-#if 0
-	std::vector<SgNode*>::iterator it;
-	std::cout << "READS:" << std::endl;
-	for(it = read_stmts.begin(); it != read_stmts.end(); it++)
-		std::cout << (*it)->unparseToString() << "   : " << (*it)->class_name() << std::endl;
-	std::cout << "WRITES:" << std::endl;
-	for(it = write_stmts.begin(); it != write_stmts.end(); it++)
-		std::cout << (*it)->unparseToString() << "   : " << (*it)->class_name() << std::endl;
-#endif	
-
-	
+	}	
 
 	/* If we get here, either there is no dependence, or none of the tests proved that there are no dependencies, so there may be one */
 	return test_flag;
